@@ -1,0 +1,413 @@
+@import "tailwindcss";
+
+/* ─── Global Reset ─────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  background: url('./assets/blue.avif') no-repeat center center fixed;
+  background-size: cover;
+  color: #fff;
+}
+
+/* ─── Scrollbar ─────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.237); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.35); }
+
+/* ─── Glass Effect ──────────────────────────────────── */
+.glass {
+  background: rgba(15, 15, 25, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ─── Section Label ─────────────────────────────────── */
+.section-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 6px;
+}
+
+/* ─── Sidebar general ───────────────────────────────── */
+.sidebar-section {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ─── Right Sidebar ─────────────────────────────────── */
+.right-sidebar {
+  width: 190px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex-shrink: 0;
+  border-left: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ─── App Layout ─────────────────────────────────────── */
+.app-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ─── Buttons ────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+  color: #fff;
+  background: rgba(255,255,255,0.08);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #7c3aed, #9333ea);
+  width: 100%;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #6d28d9, #7c3aed);
+}
+
+.btn-icon {
+  padding: 6px;
+  width: 32px;
+  height: 32px;
+}
+
+.btn-active {
+  background: rgba(124, 58, 237, 0.45) !important;
+  border: 1px solid rgba(147, 51, 234, 0.6);
+}
+
+.btn-danger {
+  background: rgba(220, 38, 38, 0.7);
+}
+
+.btn-danger:hover {
+  background: rgba(220, 38, 38, 0.9);
+}
+
+.btn-group {
+  display: flex;
+  gap: 4px;
+}
+
+/* ─── Inputs ─────────────────────────────────────────── */
+.number-input {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  color: #fff;
+  text-align: center;
+  font-size: 13px;
+  font-family: 'Inter', sans-serif;
+  width: 52px;
+  height: 31px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.number-input:focus {
+  border-color: rgba(124, 58, 237, 0.6);
+}
+.number-input::-webkit-inner-spin-button,
+.number-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+/* ─── Sliders (Base) ─────────────────────────────────── */
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100% !important;
+  min-width: 0;
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+/* Thumb — shared white circle with shadow */
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid rgba(255,255,255,0.9);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.4), 0 0 0 2px rgba(255,255,255,0.15);
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+input[type=range]::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.5), 0 0 0 3px rgba(255,255,255,0.2);
+}
+input[type=range]::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 3px;
+}
+
+/* Firefox */
+input[type=range]::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid rgba(255,255,255,0.9);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.4);
+  cursor: pointer;
+}
+input[type=range]::-moz-range-track {
+  height: 5px;
+  border-radius: 3px;
+}
+
+/* ─── Zoom Slider ────────────────────────────────────── */
+.zoom-slider {
+  width: 120px !important;
+  height: 4px !important;
+  background: linear-gradient(to right, #7c3aed, #a78bfa) !important;
+  cursor: pointer;
+}
+
+/* ─── Font Dropdown ──────────────────────────────────── */
+.font-select {
+  width: 100%;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  padding: 6px 8px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  appearance: none;
+}
+.font-select:focus {
+  border-color: rgba(124, 58, 237, 0.6);
+}
+.font-select option {
+  background: #1a0e2e;
+  color: #fff;
+  font-size: 13px;
+}
+
+/* ─── Color Input ─────────────────────────────────────── */
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+input[type=color] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: none;
+  padding: 1px;
+}
+input[type=color]::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border-radius: 5px;
+}
+input[type=color]::-webkit-color-swatch {
+  border: 2px solid rgba(255,255,255,0.2);
+  border-radius: 5px;
+}
+
+/* ─── Canvas Area ─────────────────────────────────────── */
+.canvas-viewport {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.canvas-wrapper {
+  position: relative;
+  transform-origin: center center;
+}
+
+.canvas-element {
+  border-radius: 4px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 4px 20px rgba(0,0,0,0.2);
+  display: block;
+}
+
+/* ─── Canvas Resize Handles ──────────────────────────── */
+.canvas-resize-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid rgba(124, 58, 237, 0.8);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  z-index: 200;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.canvas-resize-handle:hover {
+  transform: scale(1.3);
+  box-shadow: 0 3px 12px rgba(124,58,237,0.5);
+  background: #e9d5ff;
+}
+.resize-nw { top: -7px;  left: -7px;  cursor: nw-resize; }
+.resize-ne { top: -7px;  right: -7px; cursor: ne-resize; }
+.resize-sw { bottom: -7px; left: -7px;  cursor: sw-resize; }
+.resize-se { bottom: -7px; right: -7px; cursor: se-resize; }
+
+/* ─── Canvas Size Badge ──────────────────────────────── */
+.canvas-size-badge {
+  position: absolute;
+  bottom: 56px;
+  right: 16px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  letter-spacing: 0.04em;
+}
+
+/* ─── Zoom Controls ──────────────────────────────────── */
+.zoom-controls {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  border-radius: 10px;
+}
+
+.zoom-label {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 40px;
+  text-align: right;
+  color: rgba(255,255,255,0.85);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Delete Float Button ────────────────────────────── */
+.delete-float {
+  position: absolute;
+  /* bottom of button = y coordinate — keeps button fully above the selection */
+  transform: translateX(-50%) translateY(-100%);
+  pointer-events: all;
+  z-index: 100;
+  animation: fadeInAbove 0.18s ease;
+  font-size: 12px;
+  padding: 5px 14px;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(220,38,38,0.4), 0 2px 6px rgba(0,0,0,0.3);
+}
+
+@keyframes fadeInAbove {
+  from { opacity: 0; transform: translateX(-50%) translateY(calc(-100% - 8px)); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(-100%); }
+}
+
+/* ─── Export Dropdown ─────────────────────────────────── */
+.export-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 200;
+  animation: dropIn 0.15s ease;
+}
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.export-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.export-item:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+/* ─── Fabric.js cursor overrides ─────────────────────── */
+.canvas-container canvas {
+  cursor: default !important;
+}
+
+/* ─── Font Size Slider Prominence ───────────────────────── */
+.slider-fs {
+  height: 7px !important;
+  border-radius: 4px !important;
+}
+.slider-fs::-webkit-slider-thumb {
+  width: 20px !important;
+  height: 20px !important;
+  background: #ffffff !important;
+  border: 3px solid #7c3aed !important;
+  box-shadow: 0 2px 10px rgba(124,58,237,0.5), 0 0 0 3px rgba(124,58,237,0.15) !important;
+}
+.slider-fs::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 3px 14px rgba(124,58,237,0.7), 0 0 0 4px rgba(124,58,237,0.2) !important;
+}
+.slider-fs::-moz-range-thumb {
+  width: 20px !important;
+  height: 20px !important;
+  background: #ffffff !important;
+  border: 3px solid #7c3aed !important;
+}
