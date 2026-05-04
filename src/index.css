@@ -411,3 +411,20 @@ input[type=color]::-webkit-color-swatch {
   background: #ffffff !important;
   border: 3px solid #7c3aed !important;
 }
+
+/* ─── Draw Toolbox Animation ──────────────────────────── */
+@keyframes drawToolboxIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-12px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0) scale(1);
+  }
+}
+
+/* ─── Drawing mode cursor ─────────────────────────────── */
+.canvas-container.is-drawing-mode canvas {
+  cursor: crosshair !important;
+}

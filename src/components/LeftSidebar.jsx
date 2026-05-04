@@ -1,4 +1,6 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import * as fabric from 'fabric';
 
 const FONTS = [
   { name: 'Inter', label: 'Inter' },
@@ -28,6 +30,86 @@ export default function LeftSidebar({
 }) {
   const fileInputRef = useRef(null);
   const [showSeparatorModal, setShowSeparatorModal] = useState(false);
+
+  // ── Draw Tools state ──────────────────────────────────
+  const [showDrawTools, setShowDrawTools] = useState(false);
+  const [activeTool, setActiveTool] = useState(null); // null | 'pen' | 'marker' | 'highlighter' | 'calligraphy' | 'eraser'
+  const [brushSize, setBrushSize] = useState(4);
+  const [brushColor, setBrushColor] = useState('#e11d48');
+  const [eraserSize, setEraserSize] = useState(20);
+
+  // SVG cursor data URIs
+  const PEN_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%23fff' stroke='%23333' stroke-width='1' d='M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21a1 1 0 0 0 0-1.42l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.82z'/%3E%3C/svg%3E") 0 24, crosshair`;
+  const ERASER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Crect x='3' y='9' width='14' height='10' rx='2' fill='%23fff' stroke='%23888' stroke-width='1.5'/%3E%3Crect x='8' y='9' width='9' height='10' rx='2' fill='%23f0f0f0' stroke='%23888' stroke-width='1.5'/%3E%3Cline x1='3' y1='19' x2='20' y2='19' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E") 0 20, cell`;
+
+  // Sync fabric drawing mode whenever tool/size/color changes
+  useEffect(() => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+
+    if (!activeTool) {
+      canvas.isDrawingMode = false;
+      // Reset cursor
+      const el = canvas.upperCanvasEl || canvas.wrapperEl?.querySelector('canvas');
+      if (el) el.style.cursor = '';
+      canvas.renderAll();
+      return;
+    }
+
+    canvas.isDrawingMode = true;
+
+    if (activeTool === 'eraser') {
+      canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+      canvas.freeDrawingBrush.color = '#ffffff';
+      canvas.freeDrawingBrush.width = eraserSize;
+      canvas.freeDrawingCursor = ERASER_CURSOR;
+    } else {
+      canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+      canvas.freeDrawingCursor = PEN_CURSOR;
+      if (activeTool === 'pen') {
+        canvas.freeDrawingBrush.color = brushColor;
+        canvas.freeDrawingBrush.width = brushSize;
+      } else if (activeTool === 'marker') {
+        canvas.freeDrawingBrush.color = brushColor + 'cc';
+        canvas.freeDrawingBrush.width = brushSize * 3;
+      } else if (activeTool === 'highlighter') {
+        canvas.freeDrawingBrush.color = brushColor + '55';
+        canvas.freeDrawingBrush.width = brushSize * 5;
+      } else if (activeTool === 'calligraphy') {
+        canvas.freeDrawingBrush.color = brushColor;
+        canvas.freeDrawingBrush.width = brushSize * 2;
+        canvas.freeDrawingBrush.decimate = 1;
+      }
+    }
+
+    // Apply cursor directly to the upper canvas element
+    const upperCanvas = canvas.upperCanvasEl ||
+      canvas.wrapperEl?.querySelector('canvas:last-child') ||
+      canvas.lowerCanvasEl?.parentElement?.querySelector('canvas:last-child');
+    if (upperCanvas) {
+      upperCanvas.style.cursor = activeTool === 'eraser' ? ERASER_CURSOR : PEN_CURSOR;
+    }
+
+    canvas.renderAll();
+  }, [activeTool, brushSize, brushColor, eraserSize]);
+
+  const handleToolSelect = (tool) => {
+    setActiveTool(prev => (prev === tool ? null : tool));
+  };
+
+  const handleClearDrawings = () => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    // Remove all path objects (free drawings)
+    const paths = canvas.getObjects('path');
+    paths.forEach(p => canvas.remove(p));
+    canvas.renderAll();
+  };
+
+  const handleCloseDrawTools = () => {
+    setShowDrawTools(false);
+    setActiveTool(null); // exit drawing mode when closing
+  };
 
   const handleLayerSeparatorClick = () => {
     if (isImageSelected) setShowSeparatorModal(true);
@@ -67,7 +149,7 @@ export default function LeftSidebar({
   // Layer Separator is only active when the selected object is a fabric image
   const isImageSelected = selectedObj && (selectedObj.type === 'image' || selectedObj.type === 'FabricImage' || selectedObj._element);
 
-  return (
+  const sidebar = (
     <aside
       className="glass"
       style={{
@@ -478,10 +560,345 @@ export default function LeftSidebar({
         </div>
       </div>
 
-      {/* ── Status hint ── */}
-      <div style={{ marginTop: 'auto', padding: '10px 12px', fontSize: 10, color: 'rgba(255,255,255,0.25)', textAlign: 'center' }}>
-        {isSelected ? 'Text selected' : 'No text selected'}
+      {/* ── DRAW TOOLS BUTTON ── */}
+      <div className="sidebar-section" style={{ marginTop: 'auto' }}>
+        <button
+          id="draw-tools-btn"
+          className="btn"
+          onClick={() => setShowDrawTools(v => !v)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            background: showDrawTools
+              ? 'linear-gradient(135deg, rgba(225,29,72,0.35) 0%, rgba(239,68,68,0.25) 100%)'
+              : 'linear-gradient(135deg, rgba(225,29,72,0.15) 0%, rgba(239,68,68,0.1) 100%)',
+            border: showDrawTools
+              ? '1px solid rgba(225,29,72,0.75)'
+              : '1px solid rgba(225,29,72,0.35)',
+            color: showDrawTools ? '#fca5a5' : '#f87171',
+            fontWeight: 600,
+            fontSize: 12,
+            padding: '8px 10px',
+            borderRadius: 7,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            width: '100%',
+          }}
+          onMouseEnter={e => {
+            if (!showDrawTools) {
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(225,29,72,0.28) 0%, rgba(239,68,68,0.2) 100%)';
+              e.currentTarget.style.borderColor = 'rgba(225,29,72,0.6)';
+            }
+          }}
+          onMouseLeave={e => {
+            if (!showDrawTools) {
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(225,29,72,0.15) 0%, rgba(239,68,68,0.1) 100%)';
+              e.currentTarget.style.borderColor = 'rgba(225,29,72,0.35)';
+            }
+          }}
+          title="Open drawing tools"
+        >
+          ✏️ Draw Tools
+        </button>
       </div>
+
+      {/* ── Status hint ── */}
+      <div style={{ padding: '8px 12px', fontSize: 10, color: 'rgba(255,255,255,0.25)', textAlign: 'center' }}>
+        {activeTool ? `✏ Drawing: ${activeTool}` : isSelected ? 'Text selected' : 'No text selected'}
+      </div>
+
     </aside>
+  );
+  // The toolbox is rendered via a portal so it escapes the sidebar's scroll/stacking context
+  return (
+    <>
+      {sidebar}
+      {showDrawTools && createPortal(
+        <div
+          id="draw-toolbox"
+          style={{
+            position: 'fixed',
+            left: 185,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 52,
+            background: 'rgba(14,14,24,0.96)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 14,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.07)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 0,
+            padding: '8px 0 10px 0',
+            animation: 'drawToolboxIn 0.22s cubic-bezier(0.34,1.56,0.64,1)',
+          }}
+        >
+          {/* ── Close button ── */}
+          <button
+            id="draw-toolbox-close"
+            onClick={handleCloseDrawTools}
+            title="Close draw tools"
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: '50%',
+              background: 'rgba(220,38,38,0.8)',
+              border: '1.5px solid rgba(239,68,68,0.5)',
+              color: '#fff',
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'background 0.15s, transform 0.12s',
+              marginBottom: 6,
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(239,68,68,1)';
+              e.currentTarget.style.transform = 'scale(1.15)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(220,38,38,0.8)';
+              e.currentTarget.style.transform = 'scale(1)';
+            }}
+          >
+            ✕
+          </button>
+
+          {/* ── Divider ── */}
+          <div style={{ width: 28, height: 1, background: 'rgba(255,255,255,0.08)', marginBottom: 6 }} />
+
+          {/* ── Pen tools ── */}
+          {[
+            { id: 'pen',         svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>), hint: 'Pen — fine tip', color: '#f87171' },
+            { id: 'marker',      svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/><line x1="15" y1="5" x2="19" y2="9"/></svg>), hint: 'Marker — bold stroke', color: '#60a5fa' },
+            { id: 'highlighter', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.5 3.5L20.5 8.5L9 20H4V15L15.5 3.5Z"/><line x1="4" y1="20" x2="20" y2="20"/></svg>), hint: 'Highlighter — transparent', color: '#fbbf24' },
+            { id: 'calligraphy', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17L9 11L13 15L21 7"/><path d="M21 7H15"/><path d="M21 7V13"/></svg>), hint: 'Calligraphy — stylized', color: '#a78bfa' },
+          ].map(tool => (
+            <button
+              key={tool.id}
+              id={`draw-tool-${tool.id}`}
+              onClick={() => handleToolSelect(tool.id)}
+              title={tool.hint}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 10,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: activeTool === tool.id
+                  ? `rgba(${tool.id === 'pen' ? '248,113,113' : tool.id === 'marker' ? '96,165,250' : tool.id === 'highlighter' ? '251,191,36' : '167,139,250'},0.18)`
+                  : 'transparent',
+                border: activeTool === tool.id
+                  ? `1.5px solid ${tool.color}`
+                  : '1.5px solid transparent',
+                color: activeTool === tool.id ? tool.color : 'rgba(255,255,255,0.5)',
+                cursor: 'pointer',
+                transition: 'all 0.14s ease',
+                marginBottom: 2,
+                boxShadow: activeTool === tool.id ? `0 0 10px ${tool.color}44` : 'none',
+              }}
+              onMouseEnter={e => {
+                if (activeTool !== tool.id) {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.07)';
+                  e.currentTarget.style.color = '#fff';
+                }
+              }}
+              onMouseLeave={e => {
+                if (activeTool !== tool.id) {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+                }
+              }}
+            >
+              {tool.svg}
+            </button>
+          ))}
+
+          {/* ── Divider ── */}
+          <div style={{ width: 28, height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+
+          {/* ── Eraser ── */}
+          <button
+            id="draw-tool-eraser"
+            onClick={() => handleToolSelect('eraser')}
+            title="Eraser"
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 10,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: activeTool === 'eraser' ? 'rgba(99,102,241,0.18)' : 'transparent',
+              border: activeTool === 'eraser' ? '1.5px solid #818cf8' : '1.5px solid transparent',
+              color: activeTool === 'eraser' ? '#a5b4fc' : 'rgba(255,255,255,0.5)',
+              cursor: 'pointer',
+              transition: 'all 0.14s ease',
+              marginBottom: 2,
+              boxShadow: activeTool === 'eraser' ? '0 0 10px #818cf844' : 'none',
+            }}
+            onMouseEnter={e => {
+              if (activeTool !== 'eraser') {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.07)';
+                e.currentTarget.style.color = '#fff';
+              }
+            }}
+            onMouseLeave={e => {
+              if (activeTool !== 'eraser') {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+              }
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 20H7L3 16l10.5-10.5a2 2 0 0 1 2.83 0l3.17 3.17a2 2 0 0 1 0 2.83L12 19"/>
+              <path d="M6 11L13 18"/>
+            </svg>
+          </button>
+
+          {/* ── Color swatch (pen tools only) ── */}
+          {activeTool && activeTool !== 'eraser' && (
+            <div style={{ marginBottom: 2 }}>
+              <input
+                type="color"
+                value={brushColor}
+                onChange={e => setBrushColor(e.target.value)}
+                title="Brush color"
+                style={{
+                  width: 28, height: 28,
+                  borderRadius: '50%',
+                  border: '2px solid rgba(255,255,255,0.25)',
+                  cursor: 'pointer',
+                  padding: 2,
+                  background: 'none',
+                  display: 'block',
+                }}
+              />
+            </div>
+          )}
+
+          {/* ── Size control (shown when any tool is active) ── */}
+          {activeTool && (
+            <>
+              <div style={{ width: 28, height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+              {/* Label */}
+              <div style={{
+                fontSize: 9,
+                fontWeight: 700,
+                color: 'rgba(255,255,255,0.35)',
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                marginBottom: 2,
+              }}>
+                Size
+              </div>
+              {/* + button */}
+              <button
+                onClick={() => {
+                  if (activeTool === 'eraser') setEraserSize(s => Math.min(s + 2, 60));
+                  else setBrushSize(s => Math.min(s + 1, 30));
+                }}
+                title="Increase size"
+                style={{
+                  width: 28, height: 22,
+                  borderRadius: 6,
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: 'rgba(255,255,255,0.7)',
+                  fontSize: 14, fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background 0.1s',
+                  marginBottom: 1,
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.14)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+              >+</button>
+              {/* Numeric label */}
+              <div style={{
+                width: 28, height: 20,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, fontWeight: 700,
+                color: activeTool === 'eraser' ? '#a5b4fc' : '#f87171',
+                fontVariantNumeric: 'tabular-nums',
+              }}>
+                {activeTool === 'eraser' ? eraserSize : brushSize}
+              </div>
+              {/* - button */}
+              <button
+                onClick={() => {
+                  if (activeTool === 'eraser') setEraserSize(s => Math.max(s - 2, 4));
+                  else setBrushSize(s => Math.max(s - 1, 1));
+                }}
+                title="Decrease size"
+                style={{
+                  width: 28, height: 22,
+                  borderRadius: 6,
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: 'rgba(255,255,255,0.7)',
+                  fontSize: 14, fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background 0.1s',
+                  marginBottom: 2,
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.14)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+              >−</button>
+            </>
+          )}
+
+          {/* ── Divider ── */}
+          <div style={{ width: 28, height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+
+          {/* ── Clear ── */}
+          <button
+            id="draw-tool-clear"
+            onClick={handleClearDrawings}
+            title="Clear all drawings"
+            style={{
+              width: 38, height: 38,
+              borderRadius: 10,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'transparent',
+              border: '1.5px solid transparent',
+              color: 'rgba(255,100,100,0.55)',
+              cursor: 'pointer',
+              transition: 'all 0.14s ease',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(239,68,68,0.12)';
+              e.currentTarget.style.color = '#fca5a5';
+              e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = 'rgba(255,100,100,0.55)';
+              e.currentTarget.style.borderColor = 'transparent';
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              <path d="M10 11v6"/><path d="M14 11v6"/>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+          </button>
+
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
