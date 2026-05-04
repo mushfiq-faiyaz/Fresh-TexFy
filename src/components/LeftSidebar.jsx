@@ -787,77 +787,129 @@ export default function LeftSidebar({
             </div>
           )}
 
-          {/* ── Size control (shown when any tool is active) ── */}
-          {activeTool && (
-            <>
-              <div style={{ width: 28, height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
-              {/* Label */}
-              <div style={{
-                fontSize: 9,
-                fontWeight: 700,
-                color: 'rgba(255,255,255,0.35)',
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                marginBottom: 2,
-              }}>
-                Size
-              </div>
-              {/* + button */}
-              <button
-                onClick={() => {
-                  if (activeTool === 'eraser') setEraserSize(s => Math.min(s + 2, 60));
-                  else setBrushSize(s => Math.min(s + 1, 30));
-                }}
-                title="Increase size"
-                style={{
-                  width: 28, height: 22,
-                  borderRadius: 6,
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: 'rgba(255,255,255,0.7)',
-                  fontSize: 14, fontWeight: 700,
-                  cursor: 'pointer',
+
+          {/* ── SIZE SLIDER — vertical ── */}
+          {activeTool && (() => {
+            const isEraser    = activeTool === 'eraser';
+            const size        = isEraser ? eraserSize : brushSize;
+            const maxSize     = isEraser ? 60 : 30;
+            const accentColor = isEraser ? '#818cf8' : brushColor;
+            const dotDiam     = Math.round(4 + (size / maxSize) * 18);
+
+            return (
+              <>
+                <div style={{ width: 28, height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+
+                {/* SIZE label */}
+                <div style={{
+                  fontSize: 8, fontWeight: 800,
+                  letterSpacing: '0.1em',
+                  color: 'rgba(255,255,255,0.3)',
+                  textTransform: 'uppercase',
+                  marginBottom: 4,
+                }}>SIZE</div>
+
+                {/* Live dot preview */}
+                <div style={{
+                  width: 28, height: 28,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'background 0.1s',
-                  marginBottom: 1,
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.14)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
-              >+</button>
-              {/* Numeric label */}
-              <div style={{
-                width: 28, height: 20,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 700,
-                color: activeTool === 'eraser' ? '#a5b4fc' : '#f87171',
-                fontVariantNumeric: 'tabular-nums',
-              }}>
-                {activeTool === 'eraser' ? eraserSize : brushSize}
-              </div>
-              {/* - button */}
-              <button
-                onClick={() => {
-                  if (activeTool === 'eraser') setEraserSize(s => Math.max(s - 2, 4));
-                  else setBrushSize(s => Math.max(s - 1, 1));
-                }}
-                title="Decrease size"
-                style={{
-                  width: 28, height: 22,
-                  borderRadius: 6,
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: 'rgba(255,255,255,0.7)',
-                  fontSize: 14, fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'background 0.1s',
                   marginBottom: 2,
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.14)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
-              >−</button>
-            </>
-          )}
+                }}>
+                  <div style={{
+                    width: dotDiam, height: dotDiam,
+                    borderRadius: '50%',
+                    background: isEraser ? 'rgba(255,255,255,0.9)' : brushColor,
+                    boxShadow: `0 0 ${dotDiam + 4}px ${accentColor}bb`,
+                    border: isEraser ? `1.5px solid ${accentColor}` : 'none',
+                    transition: 'all 0.14s cubic-bezier(0.34,1.56,0.64,1)',
+                  }} />
+                </div>
+
+                {/* Vertical slider — rotated range input */}
+                <div style={{
+                  height: 80,
+                  width: 38,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'visible',
+                  position: 'relative',
+                }}>
+                  <style>{`
+                    #draw-size-slider {
+                      -webkit-appearance: none;
+                      appearance: none;
+                      width: 72px;
+                      height: 4px;
+                      border-radius: 4px;
+                      background: linear-gradient(
+                        to right,
+                        ${accentColor} 0%,
+                        ${accentColor} ${(size / maxSize) * 100}%,
+                        rgba(255,255,255,0.1) ${(size / maxSize) * 100}%,
+                        rgba(255,255,255,0.1) 100%
+                      );
+                      outline: none;
+                      cursor: pointer;
+                      transform: rotate(-90deg);
+                    }
+                    #draw-size-slider::-webkit-slider-thumb {
+                      -webkit-appearance: none;
+                      width: 14px;
+                      height: 14px;
+                      border-radius: 50%;
+                      background: ${accentColor};
+                      box-shadow: 0 0 8px ${accentColor}99, 0 0 0 2px rgba(0,0,0,0.4);
+                      cursor: pointer;
+                      transition: transform 0.12s, box-shadow 0.12s;
+                    }
+                    #draw-size-slider::-webkit-slider-thumb:hover {
+                      transform: scale(1.25);
+                      box-shadow: 0 0 14px ${accentColor}cc, 0 0 0 3px rgba(0,0,0,0.4);
+                    }
+                    #draw-size-slider::-moz-range-thumb {
+                      width: 14px; height: 14px;
+                      border-radius: 50%;
+                      background: ${accentColor};
+                      border: none;
+                      box-shadow: 0 0 8px ${accentColor}99;
+                      cursor: pointer;
+                    }
+                    #draw-size-slider::-moz-range-track {
+                      background: rgba(255,255,255,0.1);
+                      height: 4px;
+                      border-radius: 4px;
+                    }
+                  `}</style>
+                  <input
+                    id="draw-size-slider"
+                    type="range"
+                    min={isEraser ? 4 : 1}
+                    max={maxSize}
+                    value={size}
+                    onChange={e => isEraser
+                      ? setEraserSize(Number(e.target.value))
+                      : setBrushSize(Number(e.target.value))
+                    }
+                  />
+                </div>
+
+                {/* Value badge */}
+                <div style={{
+                  width: 28, height: 18,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: `${accentColor}18`,
+                  border: `1px solid ${accentColor}44`,
+                  borderRadius: 6,
+                  fontSize: 10, fontWeight: 800,
+                  color: accentColor,
+                  fontVariantNumeric: 'tabular-nums',
+                  marginBottom: 2,
+                  letterSpacing: '0.02em',
+                }}>{size}px</div>
+              </>
+            );
+          })()}
 
           {/* ── Divider ── */}
           <div style={{ width: 28, height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />

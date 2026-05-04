@@ -227,15 +227,21 @@ export default function Canvas({
     const updateSidebar = () => {
       const obj = canvas.getActiveObject();
       if (!obj) return;
+
+      // For multi-selection (ActiveSelection), don't read individual angles
+      // — doing so and writing back would rotate the whole group
+      const isMultiSelection = obj.type === 'activeSelection' || obj.type === 'ActiveSelection';
+
       if (obj.type === 'i-text') {
         setFontSize(Math.round(obj.fontSize || 32));
         setLetterSpacing(obj.charSpacing ? Math.round(obj.charSpacing / 10 * 10) / 10 : 0);
         setLineHeight(Math.round((obj.lineHeight || 1.2) * 10) / 10);
         setOpacity(Math.round((obj.opacity ?? 1) * 100));
-        setRotation(Math.round(obj.angle || 0));
+        if (!isMultiSelection) setRotation(Math.round(obj.angle || 0));
       } else {
         setOpacity(Math.round((obj.opacity ?? 1) * 100));
-        setRotation(Math.round(obj.angle || 0));
+        // Only sync rotation for single objects — not group selections
+        if (!isMultiSelection) setRotation(Math.round(obj.angle || 0));
       }
     };
 
@@ -313,7 +319,14 @@ export default function Canvas({
 
     // ── Snapping Guide Lines ─────────────────────────────
     const SNAP_THRESHOLD = 8;
-    const GUIDE_COLOR = '#ff3b6b';
+
+    // Canva-style guide colors by snap type
+    const GUIDE_STYLES = {
+      'canvas-center': { color: '#9b27af', width: 1, dash: [] },       // solid magenta — canvas center axis
+      'canvas-edge':   { color: '#E040FB', width: 1, dash: [6, 4] },   // dashed violet — canvas boundary
+      'obj-center':    { color: '#E040FB', width: 1, dash: [] },        // solid pink — object-center alignment
+      'obj-edge':      { color: '#FF2D78', width: 1, dash: [] },        // solid hot-pink — object edge alignment
+    };
 
     /** Remove all guide line objects from the canvas */
     function clearGuides() {
@@ -322,32 +335,37 @@ export default function Canvas({
     }
 
     /** Draw a vertical guide line at canvas X position x */
-    function drawVGuide(x) {
+    function drawVGuide(x, type = 'obj-edge') {
+      const s = GUIDE_STYLES[type] || GUIDE_STYLES['obj-edge'];
       const line = new fabric.Line([x, 0, x, canvas.getHeight()], {
-        stroke: GUIDE_COLOR,
-        strokeWidth: 1,
+        stroke: s.color,
+        strokeWidth: s.width,
+        strokeDashArray: s.dash.length ? s.dash : null,
         selectable: false,
         evented: false,
         hasControls: false,
         hasBorders: false,
         excludeFromExport: true,
+        opacity: 0.9,
       });
       line.isGuide = true;
       canvas.add(line);
-      // Keep guides beneath objects
       canvas.sendObjectToBack(line);
     }
 
     /** Draw a horizontal guide line at canvas Y position y */
-    function drawHGuide(y) {
+    function drawHGuide(y, type = 'obj-edge') {
+      const s = GUIDE_STYLES[type] || GUIDE_STYLES['obj-edge'];
       const line = new fabric.Line([0, y, canvas.getWidth(), y], {
-        stroke: GUIDE_COLOR,
-        strokeWidth: 1,
+        stroke: s.color,
+        strokeWidth: s.width,
+        strokeDashArray: s.dash.length ? s.dash : null,
         selectable: false,
         evented: false,
         hasControls: false,
         hasBorders: false,
         excludeFromExport: true,
+        opacity: 0.9,
       });
       line.isGuide = true;
       canvas.add(line);
@@ -364,9 +382,8 @@ export default function Canvas({
       const cw = canvas.getWidth();
       const ch = canvas.getHeight();
 
-      // Bounding box of the moving object (in canvas coords, unscaled)
       obj.setCoords();
-      const bl = obj.getBoundingRect(true); // true = absolute coords
+      const bl = obj.getBoundingRect(true);
       const objLeft   = bl.left;
       const objTop    = bl.top;
       const objRight  = bl.left + bl.width;
@@ -374,72 +391,106 @@ export default function Canvas({
       const objCX     = bl.left + bl.width  / 2;
       const objCY     = bl.top  + bl.height / 2;
 
-      // Collect snap points: { axis: 'x'|'y', canvasPos, objEdge, snapTo }
-      // axis=x → vertical guide line; axis=y → horizontal guide line
-      // objEdge: which part of the moving obj aligns ('left'|'centerX'|'right'|'top'|'centerY'|'bottom')
-      // snapTo: the canvas coordinate to snap the object's left/top to
+      // snapCandidates now include `type` for guide styling
       const snapCandidates = [];
 
       // ── Canvas boundaries & center ──────────────────
-      // Vertical snap points (object's left / center / right vs canvas X positions)
-      const canvasXPoints = [0, cw / 2, cw];
       const objXEdges = [
-        { edge: 'left',    val: objLeft,  snapOffset: 0 },
-        { edge: 'centerX', val: objCX,    snapOffset: bl.width / 2 },
-        { edge: 'right',   val: objRight, snapOffset: bl.width },
+        { val: objLeft,  snapOffset: 0 },
+        { val: objCX,    snapOffset: bl.width / 2 },
+        { val: objRight, snapOffset: bl.width },
+      ];
+      const objYEdges = [
+        { val: objTop,    snapOffset: 0 },
+        { val: objCY,     snapOffset: bl.height / 2 },
+        { val: objBottom, snapOffset: bl.height },
       ];
 
-      canvasXPoints.forEach(cx => {
-        objXEdges.forEach(({ edge, val, snapOffset }) => {
+      // Canvas X snap points with types
+      const canvasXSnaps = [
+        { pos: 0,      type: 'canvas-edge' },
+        { pos: cw / 2, type: 'canvas-center' },
+        { pos: cw,     type: 'canvas-edge' },
+      ];
+      canvasXSnaps.forEach(({ pos: cx, type }) => {
+        objXEdges.forEach(({ val, snapOffset }) => {
           if (Math.abs(val - cx) < SNAP_THRESHOLD) {
-            snapCandidates.push({ axis: 'x', guidePos: cx, snapLeft: cx - snapOffset, dist: Math.abs(val - cx) });
+            snapCandidates.push({ axis: 'x', guidePos: cx, snapLeft: cx - snapOffset, dist: Math.abs(val - cx), type });
           }
         });
       });
 
-      // Horizontal snap points (object's top / center / bottom vs canvas Y positions)
-      const canvasYPoints = [0, ch / 2, ch];
-      const objYEdges = [
-        { edge: 'top',     val: objTop,    snapOffset: 0 },
-        { edge: 'centerY', val: objCY,     snapOffset: bl.height / 2 },
-        { edge: 'bottom',  val: objBottom, snapOffset: bl.height },
+      // Canvas Y snap points with types
+      const canvasYSnaps = [
+        { pos: 0,      type: 'canvas-edge' },
+        { pos: ch / 2, type: 'canvas-center' },
+        { pos: ch,     type: 'canvas-edge' },
       ];
-
-      canvasYPoints.forEach(cy => {
-        objYEdges.forEach(({ edge, val, snapOffset }) => {
+      canvasYSnaps.forEach(({ pos: cy, type }) => {
+        objYEdges.forEach(({ val, snapOffset }) => {
           if (Math.abs(val - cy) < SNAP_THRESHOLD) {
-            snapCandidates.push({ axis: 'y', guidePos: cy, snapTop: cy - snapOffset, dist: Math.abs(val - cy) });
+            snapCandidates.push({ axis: 'y', guidePos: cy, snapTop: cy - snapOffset, dist: Math.abs(val - cy), type });
           }
         });
       });
 
       // ── Other objects' edges & centers ──────────────
       const others = canvas.getObjects().filter(o => o !== obj && o.isGuide !== true);
+
+      // ── Find the LARGEST object — its center is primary anchor ──
+      let largestObj = null;
+      let largestArea = 0;
       others.forEach(other => {
         other.setCoords();
         const ob = other.getBoundingRect(true);
-        const otherXPoints = [ob.left, ob.left + ob.width / 2, ob.left + ob.width];
-        const otherYPoints = [ob.top,  ob.top  + ob.height / 2, ob.top  + ob.height];
+        const area = ob.width * ob.height;
+        if (area > largestArea) { largestArea = area; largestObj = { rect: ob }; }
+      });
 
-        otherXPoints.forEach(cx => {
+      if (largestObj) {
+        const lx = largestObj.rect.left + largestObj.rect.width  / 2;
+        const ly = largestObj.rect.top  + largestObj.rect.height / 2;
+        objXEdges.forEach(({ val, snapOffset }) => {
+          if (Math.abs(val - lx) < SNAP_THRESHOLD)
+            snapCandidates.push({ axis: 'x', guidePos: lx, snapLeft: lx - snapOffset, dist: Math.abs(val - lx), type: 'obj-center' });
+        });
+        objYEdges.forEach(({ val, snapOffset }) => {
+          if (Math.abs(val - ly) < SNAP_THRESHOLD)
+            snapCandidates.push({ axis: 'y', guidePos: ly, snapTop: ly - snapOffset, dist: Math.abs(val - ly), type: 'obj-center' });
+        });
+      }
+
+      // Per-object edge & center snaps
+      others.forEach(other => {
+        other.setCoords();
+        const ob = other.getBoundingRect(true);
+        const otherXSnaps = [
+          { pos: ob.left,                     type: 'obj-edge' },
+          { pos: ob.left + ob.width  / 2,     type: 'obj-center' },
+          { pos: ob.left + ob.width,           type: 'obj-edge' },
+        ];
+        const otherYSnaps = [
+          { pos: ob.top,                      type: 'obj-edge' },
+          { pos: ob.top  + ob.height / 2,     type: 'obj-center' },
+          { pos: ob.top  + ob.height,          type: 'obj-edge' },
+        ];
+
+        otherXSnaps.forEach(({ pos: cx, type }) => {
           objXEdges.forEach(({ val, snapOffset }) => {
-            if (Math.abs(val - cx) < SNAP_THRESHOLD) {
-              snapCandidates.push({ axis: 'x', guidePos: cx, snapLeft: cx - snapOffset, dist: Math.abs(val - cx) });
-            }
+            if (Math.abs(val - cx) < SNAP_THRESHOLD)
+              snapCandidates.push({ axis: 'x', guidePos: cx, snapLeft: cx - snapOffset, dist: Math.abs(val - cx), type });
           });
         });
 
-        otherYPoints.forEach(cy => {
+        otherYSnaps.forEach(({ pos: cy, type }) => {
           objYEdges.forEach(({ val, snapOffset }) => {
-            if (Math.abs(val - cy) < SNAP_THRESHOLD) {
-              snapCandidates.push({ axis: 'y', guidePos: cy, snapTop: cy - snapOffset, dist: Math.abs(val - cy) });
-            }
+            if (Math.abs(val - cy) < SNAP_THRESHOLD)
+              snapCandidates.push({ axis: 'y', guidePos: cy, snapTop: cy - snapOffset, dist: Math.abs(val - cy), type });
           });
         });
       });
 
-      // ── Apply best snap per axis & draw guides ───────
-      // Pick closest snap per axis
+      // ── Apply best snap per axis & draw typed guide ───────
       const xSnaps = snapCandidates.filter(s => s.axis === 'x').sort((a, b) => a.dist - b.dist);
       const ySnaps = snapCandidates.filter(s => s.axis === 'y').sort((a, b) => a.dist - b.dist);
 
@@ -448,25 +499,21 @@ export default function Canvas({
 
       if (xSnaps.length > 0) {
         const best = xSnaps[0];
-        // Convert bounding rect snap position back to obj.left
-        // obj.left is the raw left of the object (origin-aware)
-        // We need to offset by the difference between bl.left and obj.left
         const leftOffset = obj.left - bl.left;
         newLeft = best.snapLeft + leftOffset;
-        drawVGuide(best.guidePos);
+        drawVGuide(best.guidePos, best.type);
       }
 
       if (ySnaps.length > 0) {
         const best = ySnaps[0];
         const topOffset = obj.top - bl.top;
         newTop = best.snapTop + topOffset;
-        drawHGuide(best.guidePos);
+        drawHGuide(best.guidePos, best.type);
       }
 
       obj.set({ left: newLeft, top: newTop });
       obj.setCoords();
 
-      // Push guides to back so selection handles remain visible
       canvas.getObjects().filter(o => o.isGuide).forEach(g => canvas.sendObjectToBack(g));
       canvas.requestRenderAll();
     }
@@ -487,12 +534,74 @@ export default function Canvas({
     canvas.on('mouse:up',        onMouseUp);
     // ── End Snapping Guide Lines ─────────────────────────
 
+    // ── Centre Crosshair ─────────────────────────────────
+    // Always-visible red crosshair through the CENTRE of whatever is selected.
+    // Separate from snap guides (uses isCenterGuide marker).
+
+    function clearCenterGuides() {
+      canvas.getObjects()
+        .filter(o => o.isCenterGuide === true)
+        .forEach(o => canvas.remove(o));
+    }
+
+    function drawCenterGuides() {
+      const obj = canvas.getActiveObject();
+      if (!obj) { clearCenterGuides(); return; }
+
+      clearCenterGuides();
+
+      obj.setCoords();
+      const bl  = obj.getBoundingRect(true);
+      const cx  = bl.left + bl.width  / 2;  // horizontal center
+      const cy  = bl.top  + bl.height / 2;  // vertical center
+      const cw  = canvas.getWidth();
+      const ch  = canvas.getHeight();
+
+      const STYLE = {
+        stroke: '#e53935',
+        strokeWidth: 1,
+        strokeDashArray: [5, 4],
+        selectable: false,
+        evented: false,
+        hasControls: false,
+        hasBorders: false,
+        excludeFromExport: true,
+        opacity: 0.7,
+      };
+
+      // Vertical line through centre X
+      const vLine = new fabric.Line([cx, 0, cx, ch], STYLE);
+      vLine.isCenterGuide = true;
+      canvas.add(vLine);
+      canvas.sendObjectToBack(vLine);
+
+      // Horizontal line through centre Y
+      const hLine = new fabric.Line([0, cy, cw, cy], STYLE);
+      hLine.isCenterGuide = true;
+      canvas.add(hLine);
+      canvas.sendObjectToBack(hLine);
+
+      canvas.requestRenderAll();
+    }
+
+    canvas.on('selection:created',  drawCenterGuides);
+    canvas.on('selection:updated',  drawCenterGuides);
+    canvas.on('object:moving',      drawCenterGuides);
+    canvas.on('object:modified',    drawCenterGuides);
+    canvas.on('selection:cleared',  clearCenterGuides);
+    // ── End Centre Crosshair ──────────────────────────────
+
     return () => {
       cancelAnimationFrame(rafId);
       window.removeEventListener('keydown', onKeyDown);
       canvas.off('object:moving',   onObjectMoving);
       canvas.off('object:modified', onObjectModified);
       canvas.off('mouse:up',        onMouseUp);
+      canvas.off('selection:created',  drawCenterGuides);
+      canvas.off('selection:updated',  drawCenterGuides);
+      canvas.off('object:moving',      drawCenterGuides);
+      canvas.off('object:modified',    drawCenterGuides);
+      canvas.off('selection:cleared',  clearCenterGuides);
       canvas.dispose();
     };
   }, []);
@@ -591,11 +700,24 @@ export default function Canvas({
   }, [opacity]);
 
   // ── ROTATION ─────────────────────────────────────────
+  // Guard flag: only apply rotation when triggered by user (not canvas→sidebar reads)
+  const isUserRotating = useRef(false);
+
   useEffect(() => {
     const canvas = fabricRef.current;
     const obj = canvas?.getActiveObject();
     if (!obj) return;
+
+    // Never rotate a multi-selection via the sidebar slider
+    const isMultiSelection = obj.type === 'activeSelection' || obj.type === 'ActiveSelection';
+    if (isMultiSelection) return;
+
+    // Break the feedback loop: only apply if the value genuinely differs
+    // (when canvas→sidebar sets rotation, the effect fires but angle already matches)
+    if (Math.round(obj.angle || 0) === rotation) return;
+
     obj.set('angle', rotation);
+    obj.setCoords();
     canvas.renderAll();
   }, [rotation]);
 
@@ -1623,8 +1745,10 @@ export default function Canvas({
     const bound = obj.getBoundingRect();
     const z = zoom / 100;
     setDeletePos({
+      // Center X of the selection bounding box
       x: (bound.left + bound.width / 2) * z,
-      y: bound.top * z - 50,
+      // Positioned above the top edge
+      y: bound.top * z - 44,
     });
   }, [zoom]);
 
@@ -1812,18 +1936,33 @@ export default function Canvas({
           />
         ))}
 
-        {/* Floating delete button — positioned above selection with gap */}
+        {/* Floating delete button — centered above top-middle of selection */}
         {selectedObj && deletePos && (
-          <button
-            className="btn btn-danger delete-float"
-            style={{
+          <>
+            <button
+              className="btn btn-danger delete-float"
+              style={{
+                left: deletePos.x,
+                top: deletePos.y,
+                transform: 'translateX(-50%)',
+                transformOrigin: 'center top',
+              }}
+              onMouseDown={(e) => { e.preventDefault(); deleteSelected(); }}
+            >
+              ✕ Delete
+            </button>
+            {/* Thin connector line from button bottom to selection top-center */}
+            <div style={{
+              position: 'absolute',
               left: deletePos.x,
-              top: deletePos.y,
-            }}
-            onMouseDown={(e) => { e.preventDefault(); deleteSelected(); }}
-          >
-            ✕ Delete
-          </button>
+              top: deletePos.y + 32,
+              transform: 'translateX(-50%)',
+              width: 1,
+              height: 10,
+              background: 'rgba(225,29,72,0.45)',
+              pointerEvents: 'none',
+            }} />
+          </>
         )}
       </div>
 
