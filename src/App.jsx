@@ -130,38 +130,44 @@ export default function App() {
   }, []);
 
   // ── Reorder layers (drag-and-drop in panel) ───────────
-  // orderedIds: array of layer IDs from PANEL TOP → BOTTOM
-  // Panel top = canvas front (highest z-index)
-  // Panel bottom = canvas back (lowest z-index)
+  // orderedIds: PANEL order = front-to-back (top → bottom)
   const handleReorderLayers = useCallback((orderedIds) => {
+    // 1. Update React state (pure — no side effects inside)
     setLayers(prev => {
-      // Build new layers array in panel order (front→back)
       const frontToBack = orderedIds
         .map(id => prev.find(l => l.id === id))
         .filter(Boolean);
-
-      // Sync fabric canvas: frontToBack[0] = front = highest canvas index
-      const canvas = fabricRef.current;
-      if (canvas) {
-        frontToBack.forEach((layer, panelIdx) => {
-          const obj = canvas.getObjects().find(o => o.__layerId === layer.id);
-          if (!obj) return;
-          // panelIdx 0 = front = canvas index (n-1), last = back = canvas index 0
-          const targetIdx = frontToBack.length - 1 - panelIdx;
-          // Move object to target index in the canvas stack
-          const objs = canvas._objects;
-          const cur = objs.indexOf(obj);
-          if (cur !== -1 && cur !== targetIdx) {
-            objs.splice(cur, 1);
-            objs.splice(targetIdx, 0, obj);
-          }
-        });
-        canvas.requestRenderAll();
-      }
-
-      // Store layers front-to-back so panel display (which reverses) shows top=front
-      return frontToBack;
+      // Store back-to-front so layers.reverse() in LayerPanel = correct panel order
+      return [...frontToBack].reverse();
     });
+
+    // 2. Sync Fabric canvas z-order using official API (no internal hacks)
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+
+    // orderedIds[0] = panel top = frontmost
+    // We want backmost first, frontmost last in canvas stack
+    const backToFront = [...orderedIds].reverse();
+
+    const userObjs = backToFront
+      .map(id => canvas.getObjects().find(o => o.__layerId === id))
+      .filter(Boolean);
+
+    if (userObjs.length === 0) return;
+
+    // Step 1: send all user layer objects to back (they pile up at index 0..n-1)
+    // Do it in reverse so the first element ends up at the absolute back
+    [...userObjs].reverse().forEach(obj => canvas.sendObjectToBack(obj));
+
+    // Step 2: now the user objects are stacked in backToFront order at the bottom.
+    // Non-layer objects (guides) were pushed above them by sendObjectToBack.
+    // Bring non-layer objects back to the very bottom so they don't interfere:
+    canvas.getObjects()
+      .filter(o => !o.__layerId)
+      .forEach(o => canvas.sendObjectToBack(o));
+
+    // Step 3: force a synchronous redraw
+    canvas.renderAll();
   }, [fabricRef]);
 
   // ── Panel: select layer → select fabric object ────────
