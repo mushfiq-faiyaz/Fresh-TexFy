@@ -177,6 +177,18 @@ export default function Toolbar({ fabricRef, undoStack, setUndoStack, redoStack,
     canvas.loadFromJSON(next).then(() => canvas.renderAll());
   };
 
+  // ── Listen for texfy-undo / texfy-redo custom events (fired by Ctrl+Z / Ctrl+Y) ──
+  useEffect(() => {
+    const onUndo = () => handleUndo();
+    const onRedo = () => handleRedo();
+    document.addEventListener('texfy-undo', onUndo);
+    document.addEventListener('texfy-redo', onRedo);
+    return () => {
+      document.removeEventListener('texfy-undo', onUndo);
+      document.removeEventListener('texfy-redo', onRedo);
+    };
+  }, [undoStack, redoStack]);
+
   // ── Export ────────────────────────────────────────────
   const handleExport = (format) => {
     const canvas = fabricRef.current;

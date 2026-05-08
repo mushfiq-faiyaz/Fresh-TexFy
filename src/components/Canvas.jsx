@@ -189,6 +189,7 @@ export default function Canvas({
   const canvasElRef = useRef(null);
   const canvasWrapperRef = useRef(null);
   const isHistorySaving = useRef(false);
+  const blankLayerCountRef = useRef(0); // increments for each "+" blank layer added
 
   // Canvas dimensions (resizable)
   const [canvasSize, setCanvasSize] = useState({ w: DEFAULT_W, h: DEFAULT_H });
@@ -267,7 +268,13 @@ export default function Canvas({
       onLayerSelectRef.current(null);
     });
     canvas.on('object:modified', saveHistory);
-    canvas.on('object:added', saveHistory);
+    canvas.on('object:added', (e) => {
+      // Skip guides, blank layers, and drawing-mode paths (path:created handles those)
+      if (!e.target) return;
+      if (e.target.isGuide || e.target.isCenterGuide || e.target.__isBlankLayer) return;
+      if (e.target.type === 'path' && canvas.isDrawingMode) return; // path:created will save
+      saveHistory();
+    });
 
     // Apply custom controls whenever an object is added
     canvas.on('object:added', (e) => {
@@ -335,6 +342,8 @@ export default function Canvas({
       // Select the newly drawn path so the user can move/edit it
       canvas.setActiveObject(path);
       canvas.requestRenderAll();
+      // Save history after path is fully set up (object:added fires before path:created)
+      saveHistory();
     });
 
     // ── Double click to deselect ───────────────────────
@@ -971,6 +980,7 @@ export default function Canvas({
   const addBlankLayer = useCallback(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
+    blankLayerCountRef.current += 1;
     // Use an invisible placeholder rect (not selectable, not renderable visually)
     const placeholder = new fabric.Rect({
       left: -9999,
@@ -985,7 +995,7 @@ export default function Canvas({
       excludeFromExport: true,
     });
     placeholder.__isBlankLayer = true;
-    placeholder.text = 'Layer';
+    placeholder.text = `Layer ${blankLayerCountRef.current}`;
     canvas.add(placeholder);
     onLayerAddRef.current(placeholder);
     canvas.requestRenderAll();
@@ -2203,6 +2213,7 @@ export default function Canvas({
         onToggleLock={onToggleLock}
         onDeleteLayer={onDeleteLayer}
         onAddLayer={addBlankLayer}
+        fabricRef={fabricRef}
       />
 
       {/* ── Toast Notification ── */}
