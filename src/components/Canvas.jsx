@@ -459,275 +459,255 @@ export default function Canvas({
     }
     rafId = requestAnimationFrame(animateMarchingAnts);
 
-    // ── Snapping Guide Lines ─────────────────────────────
-    const SNAP_THRESHOLD = 8;
+    // ── Canva-style Smart Snapping ───────────────────────
+    const SNAP_T     = 7;   // normal snap threshold (px)
+    const CENTER_T   = 12;  // stronger magnetic pull near canvas center
+    const PINK       = '#e040fb'; // Canva alignment pink/magenta
+    const PURPLE     = '#9c27b0'; // canvas-center purple
+    const TICK       = 8;         // equal-spacing bracket tick size
 
-    // Canva-style guide colors by snap type
-    const GUIDE_STYLES = {
-      'canvas-center': { color: '#18a0fb', width: 1, dash: [] },   // Canva blue — canvas center
-      'canvas-edge':   { color: '#18a0fb', width: 1, dash: [] },   // Canva blue — canvas edge
-      'obj-center':    { color: '#18a0fb', width: 1, dash: [] },   // blue — object center align
-      'obj-edge':      { color: '#18a0fb', width: 1, dash: [] },   // blue — object edge align
-    };
-
-    /** Remove all guide line objects from the canvas */
     function clearGuides() {
-      const toRemove = canvas.getObjects().filter(o => o.isGuide === true);
-      toRemove.forEach(o => canvas.remove(o));
+      canvas.getObjects().filter(o => o.isGuide).forEach(o => canvas.remove(o));
     }
 
-    /** Draw a vertical guide line at canvas X position x */
-    function drawVGuide(x, type = 'obj-edge') {
-      const s = GUIDE_STYLES[type] || GUIDE_STYLES['obj-edge'];
-      const line = new fabric.Line([x, 0, x, canvas.getHeight()], {
-        stroke: s.color,
-        strokeWidth: s.width,
-        strokeDashArray: s.dash.length ? s.dash : null,
-        selectable: false,
-        evented: false,
-        hasControls: false,
-        hasBorders: false,
-        excludeFromExport: true,
-        opacity: 0.9,
+    // Generic guide-line factory
+    function makeLine(x1, y1, x2, y2, color, width = 1, dash = null) {
+      const l = new fabric.Line([x1, y1, x2, y2], {
+        stroke: color, strokeWidth: width,
+        strokeDashArray: dash,
+        selectable: false, evented: false,
+        hasControls: false, hasBorders: false,
+        excludeFromExport: true, opacity: 1,
       });
-      line.isGuide = true;
-      canvas.add(line);
-      canvas.sendObjectToBack(line);
+      l.isGuide = true;
+      canvas.add(l);
+      canvas.sendObjectToBack(l);
     }
 
-    /** Draw a horizontal guide line at canvas Y position y */
-    function drawHGuide(y, type = 'obj-edge') {
-      const s = GUIDE_STYLES[type] || GUIDE_STYLES['obj-edge'];
-      const line = new fabric.Line([0, y, canvas.getWidth(), y], {
-        stroke: s.color,
-        strokeWidth: s.width,
-        strokeDashArray: s.dash.length ? s.dash : null,
-        selectable: false,
-        evented: false,
-        hasControls: false,
-        hasBorders: false,
-        excludeFromExport: true,
-        opacity: 0.9,
+    // Full-canvas vertical guide (canvas center/edge snaps)
+    function drawVFull(x, color) { makeLine(x, 0, x, canvas.getHeight(), color); }
+    // Full-canvas horizontal guide
+    function drawHFull(y, color) { makeLine(0, y, canvas.getWidth(), y, color); }
+
+    // Short vertical guide spanning two objects
+    function drawVBetween(x, yMin, yMax, color) {
+      makeLine(x, yMin - 20, x, yMax + 20, color);
+    }
+    // Dashed horizontal baseline spanning ALL aligned objects
+    function drawHDashed(y, xMin, xMax, color) {
+      makeLine(xMin - 10, y, xMax + 10, y, color, 1, [4, 4]);
+    }
+
+    // Distance pill helper
+    function drawPill(cx, cy, gap, color) {
+      const label = String(Math.round(Math.abs(gap)));
+      const pw = Math.max(24, label.length * 6 + 10);
+      const pill = new fabric.Rect({
+        left: cx - pw / 2, top: cy - 8, width: pw, height: 16, rx: 8, ry: 8,
+        fill: color, selectable: false, evented: false,
+        hasControls: false, hasBorders: false, excludeFromExport: true,
       });
-      line.isGuide = true;
-      canvas.add(line);
-      canvas.sendObjectToBack(line);
+      pill.isGuide = true;
+      canvas.add(pill);
+      const txt = new fabric.Text(label, {
+        left: cx, top: cy, fontSize: 9,
+        fontFamily: 'Inter, Arial, sans-serif', fontWeight: '700', fill: '#fff',
+        originX: 'center', originY: 'center',
+        selectable: false, evented: false,
+        hasControls: false, hasBorders: false, excludeFromExport: true,
+      });
+      txt.isGuide = true;
+      canvas.add(txt);
     }
 
-    /** Snap and guide handler — called on object:moving */
+    // Equal-spacing bracket (horizontal) with distance pill
+    function drawBracketH(x1, x2, y, gap, color) {
+      if (x2 - x1 < 3) return;
+      makeLine(x1, y, x2, y, color);
+      makeLine(x1, y - TICK / 2, x1, y + TICK / 2, color, 1.5);
+      makeLine(x2, y - TICK / 2, x2, y + TICK / 2, color, 1.5);
+      drawPill((x1 + x2) / 2, y, gap, color);
+    }
+    // Equal-spacing bracket (vertical) with distance pill
+    function drawBracketV(y1, y2, x, gap, color) {
+      if (y2 - y1 < 3) return;
+      makeLine(x, y1, x, y2, color);
+      makeLine(x - TICK / 2, y1, x + TICK / 2, y1, color, 1.5);
+      makeLine(x - TICK / 2, y2, x + TICK / 2, y2, color, 1.5);
+      drawPill(x, (y1 + y2) / 2, gap, color);
+    }
+
     function onObjectMoving(e) {
       const obj = e.target;
       if (!obj) return;
-
       clearGuides();
 
       const cw = canvas.getWidth();
       const ch = canvas.getHeight();
 
       obj.setCoords();
-      const bl = obj.getBoundingRect(true);
-      const objLeft   = bl.left;
-      const objTop    = bl.top;
-      const objRight  = bl.left + bl.width;
-      const objBottom = bl.top  + bl.height;
-      const objCX     = bl.left + bl.width  / 2;
-      const objCY     = bl.top  + bl.height / 2;
+      const bl  = obj.getBoundingRect(true);
+      const oL  = bl.left, oT = bl.top;
+      const oR  = oL + bl.width, oB = oT + bl.height;
+      const oCX = oL + bl.width / 2, oCY = oT + bl.height / 2;
 
-      // snapCandidates now include `type` for guide styling
-      const snapCandidates = [];
+      // Object's snap-anchor points on each axis
+      const xAnchors = [{ v: oL, off: 0 }, { v: oCX, off: bl.width / 2 }, { v: oR, off: bl.width }];
+      const yAnchors = [{ v: oT, off: 0 }, { v: oCY, off: bl.height / 2 }, { v: oB, off: bl.height }];
 
-      // ── Canvas boundaries & center ──────────────────
-      const objXEdges = [
-        { val: objLeft,  snapOffset: 0 },
-        { val: objCX,    snapOffset: bl.width / 2 },
-        { val: objRight, snapOffset: bl.width },
-      ];
-      const objYEdges = [
-        { val: objTop,    snapOffset: 0 },
-        { val: objCY,     snapOffset: bl.height / 2 },
-        { val: objBottom, snapOffset: bl.height },
-      ];
+      const leftBase = obj.left - oL;  // transform from bounding-box coords to object.left
+      const topBase  = obj.top  - oT;
 
-      // Canvas X snap points with types
-      const canvasXSnaps = [
-        { pos: 0,      type: 'canvas-edge' },
-        { pos: cw / 2, type: 'canvas-center' },
-        { pos: cw,     type: 'canvas-edge' },
-      ];
-      canvasXSnaps.forEach(({ pos: cx, type }) => {
-        objXEdges.forEach(({ val, snapOffset }) => {
-          if (Math.abs(val - cx) < SNAP_THRESHOLD) {
-            snapCandidates.push({ axis: 'x', guidePos: cx, snapLeft: cx - snapOffset, dist: Math.abs(val - cx), type });
-          }
+      let bestX = null, bestY = null; // { newPos, guidePos, dist, isCanvas, objBounds }
+
+      // ── 1. Canvas edges & center ──────────────────────
+      [ { p: 0,      isCenter: false },
+        { p: cw / 2, isCenter: true },
+        { p: cw,     isCenter: false },
+      ].forEach(({ p, isCenter }) => {
+        const thr = isCenter ? CENTER_T : SNAP_T;
+        xAnchors.forEach(({ v, off }) => {
+          const d = Math.abs(v - p);
+          if (d < thr && (!bestX || d < bestX.dist))
+            bestX = { newLeft: p - off + leftBase, guidePos: p, dist: d, isCanvas: true, isCenter };
         });
       });
 
-      // Canvas Y snap points with types
-      const canvasYSnaps = [
-        { pos: 0,      type: 'canvas-edge' },
-        { pos: ch / 2, type: 'canvas-center' },
-        { pos: ch,     type: 'canvas-edge' },
-      ];
-      canvasYSnaps.forEach(({ pos: cy, type }) => {
-        objYEdges.forEach(({ val, snapOffset }) => {
-          if (Math.abs(val - cy) < SNAP_THRESHOLD) {
-            snapCandidates.push({ axis: 'y', guidePos: cy, snapTop: cy - snapOffset, dist: Math.abs(val - cy), type });
-          }
+      [ { p: 0,      isCenter: false },
+        { p: ch / 2, isCenter: true },
+        { p: ch,     isCenter: false },
+      ].forEach(({ p, isCenter }) => {
+        const thr = isCenter ? CENTER_T : SNAP_T;
+        yAnchors.forEach(({ v, off }) => {
+          const d = Math.abs(v - p);
+          if (d < thr && (!bestY || d < bestY.dist))
+            bestY = { newTop: p - off + topBase, guidePos: p, dist: d, isCanvas: true, isCenter };
         });
       });
 
-      // ── Other objects' edges & centers ──────────────
-      const others = canvas.getObjects().filter(o => o !== obj && o.isGuide !== true);
-
-      // ── Find the LARGEST object — its center is primary anchor ──
-      let largestObj = null;
-      let largestArea = 0;
+      // ── 2. Other objects ──────────────────────────────
+      const others = canvas.getObjects().filter(o => o !== obj && !o.isGuide && !o.isCenterGuide);
       others.forEach(other => {
         other.setCoords();
         const ob = other.getBoundingRect(true);
-        const area = ob.width * ob.height;
-        if (area > largestArea) { largestArea = area; largestObj = { rect: ob }; }
-      });
+        const oxL = ob.left, oxR = ob.left + ob.width;
+        const oxCX = ob.left + ob.width / 2;
+        const oyT = ob.top, oyB = ob.top + ob.height;
+        const oyCY = ob.top + ob.height / 2;
 
-      if (largestObj) {
-        const lx = largestObj.rect.left + largestObj.rect.width  / 2;
-        const ly = largestObj.rect.top  + largestObj.rect.height / 2;
-        objXEdges.forEach(({ val, snapOffset }) => {
-          if (Math.abs(val - lx) < SNAP_THRESHOLD)
-            snapCandidates.push({ axis: 'x', guidePos: lx, snapLeft: lx - snapOffset, dist: Math.abs(val - lx), type: 'obj-center' });
-        });
-        objYEdges.forEach(({ val, snapOffset }) => {
-          if (Math.abs(val - ly) < SNAP_THRESHOLD)
-            snapCandidates.push({ axis: 'y', guidePos: ly, snapTop: ly - snapOffset, dist: Math.abs(val - ly), type: 'obj-center' });
-        });
-      }
-
-      // Per-object edge & center snaps
-      others.forEach(other => {
-        other.setCoords();
-        const ob = other.getBoundingRect(true);
-        const otherXSnaps = [
-          { pos: ob.left,                     type: 'obj-edge' },
-          { pos: ob.left + ob.width  / 2,     type: 'obj-center' },
-          { pos: ob.left + ob.width,           type: 'obj-edge' },
-        ];
-        const otherYSnaps = [
-          { pos: ob.top,                      type: 'obj-edge' },
-          { pos: ob.top  + ob.height / 2,     type: 'obj-center' },
-          { pos: ob.top  + ob.height,          type: 'obj-edge' },
-        ];
-
-        otherXSnaps.forEach(({ pos: cx, type }) => {
-          objXEdges.forEach(({ val, snapOffset }) => {
-            if (Math.abs(val - cx) < SNAP_THRESHOLD)
-              snapCandidates.push({ axis: 'x', guidePos: cx, snapLeft: cx - snapOffset, dist: Math.abs(val - cx), type });
+        [{ p: oxL }, { p: oxCX }, { p: oxR }].forEach(({ p }) => {
+          xAnchors.forEach(({ v, off }) => {
+            const d = Math.abs(v - p);
+            if (d < SNAP_T && (!bestX || d < bestX.dist))
+              bestX = { newLeft: p - off + leftBase, guidePos: p, dist: d, isCanvas: false, ob };
           });
         });
 
-        otherYSnaps.forEach(({ pos: cy, type }) => {
-          objYEdges.forEach(({ val, snapOffset }) => {
-            if (Math.abs(val - cy) < SNAP_THRESHOLD)
-              snapCandidates.push({ axis: 'y', guidePos: cy, snapTop: cy - snapOffset, dist: Math.abs(val - cy), type });
+        [{ p: oyT }, { p: oyCY }, { p: oyB }].forEach(({ p }) => {
+          yAnchors.forEach(({ v, off }) => {
+            const d = Math.abs(v - p);
+            if (d < SNAP_T && (!bestY || d < bestY.dist))
+              bestY = { newTop: p - off + topBase, guidePos: p, dist: d, isCanvas: false, ob };
           });
         });
       });
 
-      // ── Apply best snap per axis & draw typed guide ───────
-      const xSnaps = snapCandidates.filter(s => s.axis === 'x').sort((a, b) => a.dist - b.dist);
-      const ySnaps = snapCandidates.filter(s => s.axis === 'y').sort((a, b) => a.dist - b.dist);
-
-      let newLeft = obj.left;
-      let newTop  = obj.top;
-
-      if (xSnaps.length > 0) {
-        const best = xSnaps[0];
-        const leftOffset = obj.left - bl.left;
-        newLeft = best.snapLeft + leftOffset;
-        drawVGuide(best.guidePos, best.type);
+      // ── 3. Apply snaps & draw guides ─────────────────
+      if (bestX) {
+        obj.set({ left: bestX.newLeft });
+        obj.setCoords();
+        if (bestX.isCanvas) {
+          drawVFull(bestX.guidePos, bestX.isCenter ? PURPLE : PINK);
+        } else {
+          const newBl = obj.getBoundingRect(true);
+          const ob    = bestX.ob;
+          const yMin  = Math.min(ob.top, newBl.top);
+          const yMax  = Math.max(ob.top + ob.height, newBl.top + newBl.height);
+          drawVBetween(bestX.guidePos, yMin, yMax, PINK);
+        }
       }
 
-      if (ySnaps.length > 0) {
-        const best = ySnaps[0];
-        const topOffset = obj.top - bl.top;
-        newTop = best.snapTop + topOffset;
-        drawHGuide(best.guidePos, best.type);
+      if (bestY) {
+        obj.set({ top: bestY.newTop });
+        obj.setCoords();
+        if (bestY.isCanvas) {
+          drawHFull(bestY.guidePos, bestY.isCenter ? PURPLE : PINK);
+        } else {
+          // Span ALL objects that share this Y anchor (dashed baseline like Canva)
+          const gy = bestY.guidePos;
+          const allBounds = [obj, ...others].map(o => { o.setCoords(); return o.getBoundingRect(true); });
+          const sharing = allBounds.filter(b =>
+            Math.abs(b.top - gy) < 2 ||
+            Math.abs((b.top + b.height / 2) - gy) < 2 ||
+            Math.abs((b.top + b.height) - gy) < 2
+          );
+          const xMin = Math.min(...sharing.map(b => b.left));
+          const xMax = Math.max(...sharing.map(b => b.left + b.width));
+          drawHDashed(gy, xMin, xMax, PINK);
+        }
       }
 
-      obj.set({ left: newLeft, top: newTop });
-      obj.setCoords();
+      // ── 4. Equal-spacing guides (3 objects) ──────────
+      if (others.length >= 2) {
+        const objNow = obj.getBoundingRect(true);
+        const all = others.map(o => { o.setCoords(); return o.getBoundingRect(true); });
 
+        // Horizontal equal spacing: sort others by left, check if dragged obj fits
+        const byLeft = [...all].sort((a, b) => a.left - b.left);
+        byLeft.forEach((A, i) => {
+          const B = byLeft[i + 1];
+          if (!B) return;
+          // Gap between A and B
+          const gapAB = B.left - (A.left + A.width);
+          if (gapAB < 0) return;
+          // Check if obj is ~gapAB to the right of B
+          const idealLeft = B.left + B.width + gapAB;
+          if (Math.abs(objNow.left - idealLeft) < SNAP_T) {
+            if (!bestX) { obj.set({ left: idealLeft + leftBase }); obj.setCoords(); }
+            const cY = Math.min(A.top, B.top, objNow.top) - 14;
+            drawBracketH(A.left + A.width, B.left, cY, gapAB, PINK);
+            drawBracketH(B.left + B.width, idealLeft, cY, gapAB, PINK);
+          }
+          // Check to the left of A
+          const idealObjR = A.left - gapAB;
+          if (Math.abs((objNow.left + objNow.width) - idealObjR) < SNAP_T) {
+            if (!bestX) { obj.set({ left: idealObjR - objNow.width + leftBase }); obj.setCoords(); }
+            const cY = Math.min(A.top, B.top, objNow.top) - 14;
+            drawBracketH(idealObjR - gapAB, idealObjR, cY, gapAB, PINK);
+            drawBracketH(A.left + A.width, B.left, cY, gapAB, PINK);
+          }
+        });
+
+        // Vertical equal spacing
+        const byTop = [...all].sort((a, b) => a.top - b.top);
+        byTop.forEach((A, i) => {
+          const B = byTop[i + 1];
+          if (!B) return;
+          const gapAB = B.top - (A.top + A.height);
+          if (gapAB < 2) return;
+          const idealTop = B.top + B.height + gapAB;
+          if (Math.abs(objNow.top - idealTop) < SNAP_T) {
+            if (!bestY) { obj.set({ top: idealTop + topBase }); obj.setCoords(); }
+            const cX = Math.min(A.left, B.left, objNow.left) - 14;
+            drawBracketV(A.top + A.height, B.top, cX, gapAB, PINK);
+            drawBracketV(B.top + B.height, idealTop, cX, gapAB, PINK);
+          }
+        });
+      }
+
+      // Keep guides behind content
       canvas.getObjects().filter(o => o.isGuide).forEach(g => canvas.sendObjectToBack(g));
       canvas.requestRenderAll();
     }
 
-    /** Clear guides when drag ends */
-    function onObjectModified() {
-      clearGuides();
-      canvas.requestRenderAll();
-    }
+    function onObjectModified() { clearGuides(); canvas.requestRenderAll(); }
+    function onMouseUp()        { clearGuides(); canvas.requestRenderAll(); }
 
-    function onMouseUp() {
-      clearGuides();
-      canvas.requestRenderAll();
-    }
-
-    canvas.on('object:moving',  onObjectMoving);
+    canvas.on('object:moving',   onObjectMoving);
     canvas.on('object:modified', onObjectModified);
     canvas.on('mouse:up',        onMouseUp);
-    // ── End Snapping Guide Lines ─────────────────────────
+    // ── End Canva-style Smart Snapping ───────────────────
 
-    // ── Centre Crosshair (drag-only) ─────────────────────────────────
-    // Only shows during active dragging — like Canva. Clears when drag ends.
-
-    function clearCenterGuides() {
-      canvas.getObjects()
-        .filter(o => o.isCenterGuide === true)
-        .forEach(o => canvas.remove(o));
-    }
-
-    function drawCenterGuides() {
-      const obj = canvas.getActiveObject();
-      if (!obj) { clearCenterGuides(); return; }
-
-      clearCenterGuides();
-
-      obj.setCoords();
-      const bl  = obj.getBoundingRect(true);
-      const cx  = bl.left + bl.width  / 2;
-      const cy  = bl.top  + bl.height / 2;
-      const cw  = canvas.getWidth();
-      const ch  = canvas.getHeight();
-
-      const STYLE = {
-        stroke: '#18a0fb',        // Canva blue
-        strokeWidth: 1,
-        strokeDashArray: null,    // solid line, no dash
-        selectable: false,
-        evented: false,
-        hasControls: false,
-        hasBorders: false,
-        excludeFromExport: true,
-        opacity: 0.85,
-      };
-
-      const vLine = new fabric.Line([cx, 0, cx, ch], STYLE);
-      vLine.isCenterGuide = true;
-      canvas.add(vLine);
-      canvas.sendObjectToBack(vLine);
-
-      const hLine = new fabric.Line([0, cy, cw, cy], STYLE);
-      hLine.isCenterGuide = true;
-      canvas.add(hLine);
-      canvas.sendObjectToBack(hLine);
-
-      canvas.requestRenderAll();
-    }
-
-    // Only draw center guides while actively dragging (Canva behaviour)
-    canvas.on('object:moving',   drawCenterGuides);
-    canvas.on('mouse:up',        clearCenterGuides);   // hide on release
-    canvas.on('selection:cleared', clearCenterGuides);
-    // ── End Centre Crosshair ──────────────────────────────
 
     return () => {
       cancelAnimationFrame(rafId);
@@ -735,9 +715,6 @@ export default function Canvas({
       canvas.off('object:moving',   onObjectMoving);
       canvas.off('object:modified', onObjectModified);
       canvas.off('mouse:up',        onMouseUp);
-      canvas.off('object:moving',   drawCenterGuides);
-      canvas.off('mouse:up',        clearCenterGuides);
-      canvas.off('selection:cleared', clearCenterGuides);
       canvas.dispose();
     };
   }, []);
