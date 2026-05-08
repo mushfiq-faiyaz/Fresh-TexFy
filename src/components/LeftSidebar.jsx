@@ -577,7 +577,7 @@ export default function LeftSidebar({
         </div>
       </div>
 
-      {/* ── DRAW TOOLS BUTTON ── */}
+
       <div className="sidebar-section" style={{ marginTop: 'auto' }}>
         <button
           id="draw-tools-btn"

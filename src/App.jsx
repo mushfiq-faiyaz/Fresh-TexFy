@@ -302,6 +302,7 @@ export default function App() {
           onReorderLayers={handleReorderLayers}
         />
         <RightSidebar
+          fabricRef={fabricRef}
           selectedObj={selectedObj}
           fontSize={fontSize} setFontSize={setFontSize}
           letterSpacing={letterSpacing} setLetterSpacing={setLetterSpacing}

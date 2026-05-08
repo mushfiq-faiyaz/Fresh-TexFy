@@ -395,14 +395,15 @@ export default function Canvas({
             }
             break;
 
-          // Cut
+          // Cut — works for single & multi-selection
           case 'x':
             if (!isEditing && active) {
               e.preventDefault();
               active.clone().then(cloned => {
                 _clipboard = cloned;
-                canvas.remove(active);
+                const toRemove = canvas.getActiveObjects();
                 canvas.discardActiveObject();
+                toRemove.forEach(o => canvas.remove(o));
                 canvas.renderAll();
                 setSelectedObj(null);
               });
@@ -481,13 +482,15 @@ export default function Canvas({
       }
 
       // ── Non-Ctrl keys ──────────────────────────────
-      // Delete / Backspace
+      // Delete / Backspace — works for single & multi-selection, with undo support
       if ((e.key === 'Delete' || e.key === 'Backspace') && active && !isEditing && !isTyping) {
         e.preventDefault();
-        canvas.remove(active);
+        const toRemove = canvas.getActiveObjects();
         canvas.discardActiveObject();
+        toRemove.forEach(o => canvas.remove(o));
         canvas.renderAll();
         setSelectedObj(null);
+        saveHistory(); // save AFTER removal so Ctrl+Z restores deleted objects
         return;
       }
 
@@ -663,7 +666,13 @@ export default function Canvas({
       });
 
       // ── 2. Other objects ──────────────────────────────
-      const others = canvas.getObjects().filter(o => o !== obj && !o.isGuide && !o.isCenterGuide);
+      // Exclude the moved object AND all its children (when it's an ActiveSelection)
+      // so we don't snap against our own selected items.
+      const activeSet = new Set(canvas.getActiveObjects());
+      activeSet.add(obj); // also exclude the ActiveSelection wrapper itself
+      const others = canvas.getObjects().filter(
+        o => !activeSet.has(o) && !o.isGuide && !o.isCenterGuide && !o.__isBlankLayer
+      );
       others.forEach(other => {
         other.setCoords();
         const ob = other.getBoundingRect(true);
@@ -1947,15 +1956,19 @@ export default function Canvas({
   }, [addImage]);
 
   // ── Delete selected ───────────────────────────────────
+  // Works for both single objects and multi-selections (ActiveSelection).
+  // Calls saveHistory() AFTER removal so Ctrl+Z correctly restores deleted items.
   const deleteSelected = useCallback(() => {
     const canvas = fabricRef.current;
-    const obj = canvas?.getActiveObject();
-    if (!obj) return;
-    canvas.remove(obj);
+    if (!canvas) return;
+    const toRemove = canvas.getActiveObjects();
+    if (toRemove.length === 0) return;
     canvas.discardActiveObject();
+    toRemove.forEach(o => canvas.remove(o));
     canvas.renderAll();
     setSelectedObj(null);
-  }, []);
+    saveHistory(); // save AFTER removal so Ctrl+Z restores deleted objects
+  }, [saveHistory]);
 
   // ── Delete button position ────────────────────────────
   const [deletePos, setDeletePos] = useState(null);

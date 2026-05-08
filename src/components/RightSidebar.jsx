@@ -25,6 +25,7 @@ function useScrollOnSlider(setter, min, max, step = 1) {
 }
 
 export default function RightSidebar({
+  fabricRef,
   selectedObj,
   fontSize, setFontSize,
   letterSpacing, setLetterSpacing,
@@ -41,6 +42,18 @@ export default function RightSidebar({
   const onScrollLineHeight = useScrollOnSlider(setLineHeight, 1.0, 3.0, 0.1);
   const onScrollOpacity = useScrollOnSlider(setOpacity, 0, 100, 1);
   const onScrollRotation = useScrollOnSlider(setRotation, -180, 180, 1);
+
+  // ── Canvas position alignment helper ──────────────────
+  const alignObj = (fn) => {
+    const canvas = fabricRef?.current;
+    if (!canvas) return;
+    const obj = canvas.getActiveObject();
+    if (!obj) return;
+    obj.setCoords();
+    fn(obj, canvas);
+    obj.setCoords();
+    canvas.requestRenderAll();
+  };
 
   return (
     <aside
@@ -182,6 +195,112 @@ export default function RightSidebar({
           style={sliderStyle(rotation, -180, 180, '#d97706', '#fcd34d')}
         />
       </div>
+
+      {/* ── POSITION (canvas alignment) ── works for single & multi-selection ── */}
+      {selectedObj && (
+        <div className="sidebar-section">
+          <div className="section-label" style={{ marginBottom: 8 }}>Position</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
+
+            {/* Center H */}
+            <button
+              className="btn"
+              style={{ fontSize: 11, padding: '6px 4px', gap: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title="Center horizontally on canvas"
+              onClick={() => alignObj((obj, cv) => {
+                const bl = obj.getBoundingRect(true);
+                obj.set({ left: obj.left + (cv.getWidth() / 2 - (bl.left + bl.width / 2)) });
+              })}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="2" x2="12" y2="22"/><rect x="4" y="7" width="16" height="10" rx="2"/>
+              </svg>
+              Center H
+            </button>
+
+            {/* Center V */}
+            <button
+              className="btn"
+              style={{ fontSize: 11, padding: '6px 4px', gap: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title="Center vertically on canvas"
+              onClick={() => alignObj((obj, cv) => {
+                const bl = obj.getBoundingRect(true);
+                obj.set({ top: obj.top + (cv.getHeight() / 2 - (bl.top + bl.height / 2)) });
+              })}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="2" y1="12" x2="22" y2="12"/><rect x="7" y="4" width="10" height="16" rx="2"/>
+              </svg>
+              Center V
+            </button>
+
+            {/* Left */}
+            <button
+              className="btn"
+              style={{ fontSize: 11, padding: '6px 4px', gap: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title="Align to left edge of canvas"
+              onClick={() => alignObj((obj) => {
+                const bl = obj.getBoundingRect(true);
+                obj.set({ left: obj.left - bl.left });
+              })}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="4" y1="2" x2="4" y2="22"/><rect x="4" y="7" width="12" height="10" rx="2"/>
+              </svg>
+              Left
+            </button>
+
+            {/* Right */}
+            <button
+              className="btn"
+              style={{ fontSize: 11, padding: '6px 4px', gap: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title="Align to right edge of canvas"
+              onClick={() => alignObj((obj, cv) => {
+                const bl = obj.getBoundingRect(true);
+                obj.set({ left: obj.left + (cv.getWidth() - (bl.left + bl.width)) });
+              })}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="20" y1="2" x2="20" y2="22"/><rect x="8" y="7" width="12" height="10" rx="2"/>
+              </svg>
+              Right
+            </button>
+
+            {/* Top */}
+            <button
+              className="btn"
+              style={{ fontSize: 11, padding: '6px 4px', gap: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title="Align to top edge of canvas"
+              onClick={() => alignObj((obj) => {
+                const bl = obj.getBoundingRect(true);
+                obj.set({ top: obj.top - bl.top });
+              })}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="2" y1="4" x2="22" y2="4"/><rect x="7" y="4" width="10" height="12" rx="2"/>
+              </svg>
+              Top
+            </button>
+
+            {/* Bottom */}
+            <button
+              className="btn"
+              style={{ fontSize: 11, padding: '6px 4px', gap: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title="Align to bottom edge of canvas"
+              onClick={() => alignObj((obj, cv) => {
+                const bl = obj.getBoundingRect(true);
+                obj.set({ top: obj.top + (cv.getHeight() - (bl.top + bl.height)) });
+              })}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="2" y1="20" x2="22" y2="20"/><rect x="7" y="8" width="10" height="12" rx="2"/>
+              </svg>
+              Bottom
+            </button>
+
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
