@@ -678,10 +678,10 @@ export default function LeftSidebar({
 
           {/* ── Pen tools ── */}
           {[
-            { id: 'pen',         svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>), hint: 'Pen — fine tip', color: '#f87171' },
-            { id: 'marker',      svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/><line x1="15" y1="5" x2="19" y2="9"/></svg>), hint: 'Marker — bold stroke', color: '#60a5fa' },
-            { id: 'highlighter', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.5 3.5L20.5 8.5L9 20H4V15L15.5 3.5Z"/><line x1="4" y1="20" x2="20" y2="20"/></svg>), hint: 'Highlighter — transparent', color: '#fbbf24' },
-            { id: 'calligraphy', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17L9 11L13 15L21 7"/><path d="M21 7H15"/><path d="M21 7V13"/></svg>), hint: 'Calligraphy — stylized', color: '#a78bfa' },
+            { id: 'pen', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>), hint: 'Pen — fine tip', color: '#f87171' },
+            { id: 'marker', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /><line x1="15" y1="5" x2="19" y2="9" /></svg>), hint: 'Marker — bold stroke', color: '#60a5fa' },
+            { id: 'highlighter', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.5 3.5L20.5 8.5L9 20H4V15L15.5 3.5Z" /><line x1="4" y1="20" x2="20" y2="20" /></svg>), hint: 'Highlighter — transparent', color: '#fbbf24' },
+            { id: 'calligraphy', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17L9 11L13 15L21 7" /><path d="M21 7H15" /><path d="M21 7V13" /></svg>), hint: 'Calligraphy — stylized', color: '#a78bfa' },
           ].map(tool => (
             <button
               key={tool.id}
@@ -761,8 +761,8 @@ export default function LeftSidebar({
             }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 20H7L3 16l10.5-10.5a2 2 0 0 1 2.83 0l3.17 3.17a2 2 0 0 1 0 2.83L12 19"/>
-              <path d="M6 11L13 18"/>
+              <path d="M20 20H7L3 16l10.5-10.5a2 2 0 0 1 2.83 0l3.17 3.17a2 2 0 0 1 0 2.83L12 19" />
+              <path d="M6 11L13 18" />
             </svg>
           </button>
 
@@ -790,11 +790,11 @@ export default function LeftSidebar({
 
           {/* ── SIZE SLIDER — vertical ── */}
           {activeTool && (() => {
-            const isEraser    = activeTool === 'eraser';
-            const size        = isEraser ? eraserSize : brushSize;
-            const maxSize     = isEraser ? 60 : 30;
+            const isEraser = activeTool === 'eraser';
+            const size = isEraser ? eraserSize : brushSize;
+            const maxSize = isEraser ? 60 : 30;
             const accentColor = isEraser ? '#818cf8' : brushColor;
-            const dotDiam     = Math.round(4 + (size / maxSize) * 18);
+            const dotDiam = Math.round(4 + (size / maxSize) * 18);
 
             return (
               <>
@@ -941,10 +941,10 @@ export default function LeftSidebar({
             }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-              <path d="M10 11v6"/><path d="M14 11v6"/>
-              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" /><path d="M14 11v6" />
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
             </svg>
           </button>
 

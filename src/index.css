@@ -277,31 +277,40 @@ input[type=color]::-webkit-color-swatch {
 
 .canvas-element {
   border-radius: 4px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 4px 20px rgba(0,0,0,0.2);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.10),
+    0 24px 72px rgba(0, 0, 0, 0.45),
+    0 8px 24px rgba(0, 0, 0, 0.28);
   display: block;
 }
 
 /* ─── Canvas Resize Handles ──────────────────────────── */
 .canvas-resize-handle {
   position: absolute;
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: #ffffff;
-  border: 2px solid rgba(124, 58, 237, 0.8);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  border: none;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.9),
+    0 2px 10px rgba(0, 0, 0, 0.5),
+    0 0 0 3px rgba(124, 58, 237, 0.35);
   z-index: 200;
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.15s ease;
 }
 .canvas-resize-handle:hover {
-  transform: scale(1.3);
-  box-shadow: 0 3px 12px rgba(124,58,237,0.5);
-  background: #e9d5ff;
+  transform: scale(1.5);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 1),
+    0 4px 16px rgba(124, 58, 237, 0.7),
+    0 0 0 4px rgba(124, 58, 237, 0.25);
 }
-.resize-nw { top: -7px;  left: -7px;  cursor: nw-resize; }
-.resize-ne { top: -7px;  right: -7px; cursor: ne-resize; }
-.resize-sw { bottom: -7px; left: -7px;  cursor: sw-resize; }
-.resize-se { bottom: -7px; right: -7px; cursor: se-resize; }
+.resize-nw { top: -5px;   left: -5px;   cursor: nw-resize; }
+.resize-ne { top: -5px;   right: -5px;  cursor: ne-resize; }
+.resize-sw { bottom: -5px; left: -5px;  cursor: sw-resize; }
+.resize-se { bottom: -5px; right: -5px; cursor: se-resize; }
 
 /* ─── Canvas Size Badge ──────────────────────────────── */
 .canvas-size-badge {
@@ -336,23 +345,67 @@ input[type=color]::-webkit-color-swatch {
   font-variant-numeric: tabular-nums;
 }
 
-/* ─── Delete Float Button ────────────────────────────── */
+/* ─── Delete Float Button ─── macOS / Canva style ────── */
 .delete-float {
   position: absolute;
-  /* bottom of button = y coordinate — keeps button fully above the selection */
   transform: translateX(-50%) translateY(-100%);
   pointer-events: all;
   z-index: 100;
-  animation: fadeInAbove 0.18s ease;
-  font-size: 12px;
-  padding: 5px 14px;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(220,38,38,0.4), 0 2px 6px rgba(0,0,0,0.3);
+
+  /* Size — compact square pill */
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+
+  /* Frosted glass dark background */
+  background: rgba(22, 22, 30, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+
+  /* Icon color */
+  color: rgba(255, 255, 255, 0.75);
+
+  /* Layout */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* Shadow */
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.45),
+    0 1px 4px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+  /* Pop in */
+  animation: deletePopIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease,
+    box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
-@keyframes fadeInAbove {
-  from { opacity: 0; transform: translateX(-50%) translateY(calc(-100% - 8px)); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(-100%); }
+.delete-float:hover {
+  background: rgba(220, 38, 38, 0.88);
+  backdrop-filter: blur(14px);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #ffffff;
+  box-shadow:
+    0 6px 24px rgba(220, 38, 38, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 120, 120, 0.2);
+  transform: translateX(-50%) translateY(-100%) scale(1.08);
+}
+
+.delete-float:active {
+  transform: translateX(-50%) translateY(-100%) scale(0.93);
+  background: rgba(185, 28, 28, 0.95);
+}
+
+@keyframes deletePopIn {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(calc(-100% + 10px)) scale(0.75); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(-100%) scale(1); }
 }
 
 /* ─── Export Dropdown ─────────────────────────────────── */

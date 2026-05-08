@@ -4,30 +4,32 @@ import * as fabric from 'fabric';
 import LayerPanel from './LayerPanel';
 
 // ── Apply fabric v7 global selection style defaults ───────────────────────────
-const CORNER_SIZE = 12;
+const CORNER_SIZE = 8;
 
 if (fabric.InteractiveFabricObject) {
   Object.assign(fabric.InteractiveFabricObject.ownDefaults, {
-    borderColor: '#6366f1',
-    borderDashArray: [8, 4],
-    cornerColor: '#6366f1',
+    borderColor: '#7c3aed',       // Canva-style thin purple
+    borderDashArray: null,        // solid — no dash
+    cornerColor: '#7c3aed',
     cornerStrokeColor: '#ffffff',
     cornerStyle: 'circle',
     cornerSize: CORNER_SIZE,
-    borderScaleFactor: 2,
+    borderScaleFactor: 1,         // thin 1px border
     transparentCorners: false,
     borderOpacity: 1,
+    padding: 4,                   // small gap between object and border
   });
 } else {
-  fabric.Object.prototype.borderColor = '#6366f1';
-  fabric.Object.prototype.borderDashArray = [8, 4];
-  fabric.Object.prototype.cornerColor = '#6366f1';
+  fabric.Object.prototype.borderColor = '#7c3aed';
+  fabric.Object.prototype.borderDashArray = null;
+  fabric.Object.prototype.cornerColor = '#7c3aed';
   fabric.Object.prototype.cornerStrokeColor = '#ffffff';
   fabric.Object.prototype.cornerStyle = 'circle';
   fabric.Object.prototype.cornerSize = CORNER_SIZE;
-  fabric.Object.prototype.borderScaleFactor = 2;
+  fabric.Object.prototype.borderScaleFactor = 1;
   fabric.Object.prototype.transparentCorners = false;
   fabric.Object.prototype.borderOpacity = 1;
+  fabric.Object.prototype.padding = 4;
 }
 
 // ── Custom control render functions ────────────────────────────────────────────
@@ -39,49 +41,48 @@ function renderFilledCircle(ctx, left, top, _styleOverride, fabricObject, contro
   if (fabricObject.angle) ctx.rotate(fabric.util.degreesToRadians(fabricObject.angle));
   ctx.beginPath();
   ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
-  ctx.fillStyle = '#6366f1';
+  ctx.fillStyle = '#ffffff';
   ctx.fill();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#7c3aed';
+  ctx.lineWidth = 1.5;
   ctx.stroke();
   ctx.restore();
 }
 
 // Hollow (ring) circle for edge handles
 function renderHollowCircle(ctx, left, top, _styleOverride, fabricObject, controlPoint) {
-  const size = 8;
+  const size = 7;
   ctx.save();
   ctx.translate(left, top);
   if (fabricObject.angle) ctx.rotate(fabric.util.degreesToRadians(fabricObject.angle));
   ctx.beginPath();
   ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillStyle = '#ffffff';
   ctx.fill();
   ctx.strokeStyle = '#7c3aed';
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 1.5;
   ctx.stroke();
   ctx.restore();
 }
 
-// Rotate handle — crosshair style
+// Rotate handle — clean circle
 function renderRotateHandle(ctx, left, top, _styleOverride, fabricObject) {
-  const size = 10;
+  const size = 9;
   ctx.save();
   ctx.translate(left, top);
   if (fabricObject.angle) ctx.rotate(fabric.util.degreesToRadians(fabricObject.angle));
   ctx.beginPath();
   ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
-  ctx.fillStyle = '#22d3ee';
+  ctx.fillStyle = '#ffffff';
   ctx.fill();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  // Draw small crosshair marks
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = '#7c3aed';
   ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // Small rotation arc indicator
   ctx.beginPath();
-  ctx.moveTo(-3, 0); ctx.lineTo(3, 0);
-  ctx.moveTo(0, -3); ctx.lineTo(0, 3);
+  ctx.arc(0, 0, 2.5, 0, Math.PI * 1.5);
+  ctx.strokeStyle = '#7c3aed';
+  ctx.lineWidth = 1.5;
   ctx.stroke();
   ctx.restore();
 }
@@ -1860,8 +1861,8 @@ export default function Canvas({
     setDeletePos({
       // Center X of the selection bounding box
       x: (bound.left + bound.width / 2) * z,
-      // Positioned above the top edge
-      y: bound.top * z - 44,
+      // Positioned further above the top edge (more breathing room)
+      y: bound.top * z - 72,
     });
   }, [zoom]);
 
@@ -2049,33 +2050,25 @@ export default function Canvas({
           />
         ))}
 
-        {/* Floating delete button — centered above top-middle of selection */}
+        {/* Floating delete button — macOS/Canva style, centered above selection */}
         {selectedObj && deletePos && (
-          <>
-            <button
-              className="btn btn-danger delete-float"
-              style={{
-                left: deletePos.x,
-                top: deletePos.y,
-                transform: 'translateX(-50%)',
-                transformOrigin: 'center top',
-              }}
-              onMouseDown={(e) => { e.preventDefault(); deleteSelected(); }}
-            >
-              ✕ Delete
-            </button>
-            {/* Thin connector line from button bottom to selection top-center */}
-            <div style={{
-              position: 'absolute',
+          <button
+            className="delete-float"
+            style={{
               left: deletePos.x,
-              top: deletePos.y + 32,
-              transform: 'translateX(-50%)',
-              width: 1,
-              height: 10,
-              background: 'rgba(225,29,72,0.45)',
-              pointerEvents: 'none',
-            }} />
-          </>
+              top: deletePos.y,
+            }}
+            onMouseDown={(e) => { e.preventDefault(); deleteSelected(); }}
+            title="Delete"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            </svg>
+          </button>
         )}
       </div>
 
