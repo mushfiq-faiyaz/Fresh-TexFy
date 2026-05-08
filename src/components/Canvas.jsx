@@ -271,6 +271,21 @@ export default function Canvas({
       if (e.target) onLayerRemoveRef.current(e.target);
     });
 
+    // ── path:created — auto-register free-drawn paths as layers ──
+    // Fabric fires this after the user lifts the pen in drawing mode
+    let drawingCount = 0;
+    canvas.on('path:created', (e) => {
+      const path = e.path;
+      if (!path) return;
+      drawingCount += 1;
+      applyCustomControls(path);
+      path.text = `Drawing ${drawingCount}`;
+      onLayerAddRef.current(path);
+      // Select the newly drawn path so the user can move/edit it
+      canvas.setActiveObject(path);
+      canvas.requestRenderAll();
+    });
+
     // ── Double click to deselect ───────────────────────
     canvas.on('mouse:dblclick', (e) => {
       if (!e.target) {
@@ -892,6 +907,37 @@ export default function Canvas({
     canvas.requestRenderAll();
     setSelectedObj(text);
     setFontSize(32);
+    // Auto-enter editing mode so user can type immediately
+    setTimeout(() => {
+      text.enterEditing();
+      text.selectAll();
+      canvas.requestRenderAll();
+    }, 50);
+  }, []);
+
+  // ── Add Blank Layer ────────────────────────────────────
+  // Creates a named empty layer entry without adding visible content
+  const addBlankLayer = useCallback(() => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    // Use an invisible placeholder rect (not selectable, not renderable visually)
+    const placeholder = new fabric.Rect({
+      left: -9999,
+      top: -9999,
+      width: 1,
+      height: 1,
+      opacity: 0,
+      selectable: false,
+      evented: false,
+      hasControls: false,
+      hasBorders: false,
+      excludeFromExport: true,
+    });
+    placeholder.__isBlankLayer = true;
+    placeholder.text = 'Layer';
+    canvas.add(placeholder);
+    onLayerAddRef.current(placeholder);
+    canvas.requestRenderAll();
   }, []);
 
   // ── Show toast notification ───────────────────────────
@@ -1800,17 +1846,18 @@ export default function Canvas({
     }
   }, [showToast]);
 
-  // ── Expose addText & addImage via fabricRef ───────────
+  // ── Expose addText, addImage, separators & addBlankLayer via fabricRef ───
   useEffect(() => {
     if (fabricRef.current) {
       fabricRef.current._addText = addText;
       fabricRef.current._addImage = addImage;
+      fabricRef.current._addBlankLayer = addBlankLayer;
       fabricRef.current._separateLayers = separateLayers;
       fabricRef.current._separateColorWise = separateColorWise;
       fabricRef.current._separateAreaWise = separateAreaWise;
       fabricRef.current._separateBothWise = separateBothWise;
     }
-  }, [addText, addImage, separateLayers, separateColorWise, separateAreaWise, separateBothWise]);
+  }, [addText, addImage, addBlankLayer, separateLayers, separateColorWise, separateAreaWise, separateBothWise]);
 
   // ── Drag and Drop handlers ────────────────────────────
   const handleDragOver = useCallback((e) => {
@@ -2104,7 +2151,7 @@ export default function Canvas({
         onToggleVisibility={onToggleVisibility}
         onToggleLock={onToggleLock}
         onDeleteLayer={onDeleteLayer}
-        onAddLayer={addText}
+        onAddLayer={addBlankLayer}
       />
 
       {/* ── Toast Notification ── */}

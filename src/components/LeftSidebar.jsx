@@ -97,6 +97,23 @@ export default function LeftSidebar({
     setActiveTool(prev => (prev === tool ? null : tool));
   };
 
+  // ── Keyboard shortcuts for draw tools ─────────────────
+  useEffect(() => {
+    if (!showDrawTools) return;
+    const TOOL_KEYS = { p: 'pen', m: 'marker', h: 'highlighter', c: 'calligraphy', e: 'eraser' };
+    const onKey = (ev) => {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const tool = TOOL_KEYS[ev.key.toLowerCase()];
+      if (tool) {
+        ev.preventDefault();
+        setActiveTool(prev => (prev === tool ? null : tool));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showDrawTools]);
+
   const handleClearDrawings = () => {
     const canvas = fabricRef.current;
     if (!canvas) return;
@@ -678,10 +695,10 @@ export default function LeftSidebar({
 
           {/* ── Pen tools ── */}
           {[
-            { id: 'pen', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>), hint: 'Pen — fine tip', color: '#f87171' },
-            { id: 'marker', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /><line x1="15" y1="5" x2="19" y2="9" /></svg>), hint: 'Marker — bold stroke', color: '#60a5fa' },
-            { id: 'highlighter', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.5 3.5L20.5 8.5L9 20H4V15L15.5 3.5Z" /><line x1="4" y1="20" x2="20" y2="20" /></svg>), hint: 'Highlighter — transparent', color: '#fbbf24' },
-            { id: 'calligraphy', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17L9 11L13 15L21 7" /><path d="M21 7H15" /><path d="M21 7V13" /></svg>), hint: 'Calligraphy — stylized', color: '#a78bfa' },
+            { id: 'pen',         key: 'P', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>), hint: 'Pen — fine tip  [P]', color: '#f87171' },
+            { id: 'marker',      key: 'M', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /><line x1="15" y1="5" x2="19" y2="9" /></svg>), hint: 'Marker — bold stroke  [M]', color: '#60a5fa' },
+            { id: 'highlighter', key: 'H', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.5 3.5L20.5 8.5L9 20H4V15L15.5 3.5Z" /><line x1="4" y1="20" x2="20" y2="20" /></svg>), hint: 'Highlighter — transparent  [H]', color: '#fbbf24' },
+            { id: 'calligraphy', key: 'C', svg: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17L9 11L13 15L21 7" /><path d="M21 7H15" /><path d="M21 7V13" /></svg>), hint: 'Calligraphy — stylized  [C]', color: '#a78bfa' },
           ].map(tool => (
             <button
               key={tool.id}
@@ -692,6 +709,7 @@ export default function LeftSidebar({
                 width: 38,
                 height: 38,
                 borderRadius: 10,
+                position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -720,6 +738,20 @@ export default function LeftSidebar({
                 }
               }}
             >
+              {/* Shortcut badge */}
+              <span style={{
+                position: 'absolute',
+                bottom: 3,
+                right: 3,
+                fontSize: 7,
+                fontWeight: 800,
+                fontFamily: 'monospace',
+                color: activeTool === tool.id ? tool.color : 'rgba(255,255,255,0.22)',
+                lineHeight: 1,
+                letterSpacing: 0,
+                pointerEvents: 'none',
+                transition: 'color 0.14s',
+              }}>{tool.key}</span>
               {tool.svg}
             </button>
           ))}
@@ -727,15 +759,16 @@ export default function LeftSidebar({
           {/* ── Divider ── */}
           <div style={{ width: 28, height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
 
-          {/* ── Eraser ── */}
+          {/* ── Eraser [E] ── */}
           <button
             id="draw-tool-eraser"
             onClick={() => handleToolSelect('eraser')}
-            title="Eraser"
+            title="Eraser  [E]"
             style={{
               width: 38,
               height: 38,
               borderRadius: 10,
+              position: 'relative',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -760,6 +793,19 @@ export default function LeftSidebar({
               }
             }}
           >
+            {/* Shortcut badge */}
+            <span style={{
+              position: 'absolute',
+              bottom: 3,
+              right: 3,
+              fontSize: 7,
+              fontWeight: 800,
+              fontFamily: 'monospace',
+              color: activeTool === 'eraser' ? '#a5b4fc' : 'rgba(255,255,255,0.22)',
+              lineHeight: 1,
+              pointerEvents: 'none',
+              transition: 'color 0.14s',
+            }}>E</span>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M20 20H7L3 16l10.5-10.5a2 2 0 0 1 2.83 0l3.17 3.17a2 2 0 0 1 0 2.83L12 19" />
               <path d="M6 11L13 18" />
