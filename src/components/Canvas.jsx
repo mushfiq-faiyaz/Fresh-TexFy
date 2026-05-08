@@ -3,12 +3,19 @@ import * as fabric from 'fabric';
 
 import LayerPanel from './LayerPanel';
 
-// ── Cursor SVG data URIs ──────────────────────────────────────────────────────
-const ROTATE_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='8' fill='none' stroke='%23fff' stroke-width='2.5'/%3E%3Ccircle cx='10' cy='10' r='8' fill='none' stroke='%23000' stroke-width='1.2'/%3E%3Cpath fill='%23000' stroke='%23fff' stroke-width='0.8' d='M10 1.5 L13 5 L10 4 A6 6 0 0 1 16 10 L17.5 10 A7.5 7.5 0 0 0 10 1.5Z'/%3E%3C/svg%3E") 10 10, crosshair`;
-
-const MOVE_CURSOR   = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath fill='%23fff' stroke='%23000' stroke-width='1' d='M10 1l2.5 4h-2v3h3V5.5l4 2.5-4 2.5V8h-3v3h2L10 15.5 7.5 11h2V8h-3v2.5L2.5 8l4-2.5V8h3V5h-2Z'/%3E%3C/svg%3E") 10 10, move`;
-
-const GRAB_CURSOR   = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Cpath fill='%23fff' stroke='%23000' stroke-width='1' d='M9 1a1.5 1.5 0 0 1 1.5 1.5V8A1.5 1.5 0 0 1 12 9.5V8a1.5 1.5 0 0 1 3 0v4c0 2.76-2.24 5-5 5S5 14.76 5 12V8a1.5 1.5 0 0 1 3 0V2.5A1.5 1.5 0 0 1 9 1z'/%3E%3C/svg%3E") 9 0, grab`;
+// ── Cursor names — native OS cursors (Windows/macOS style) ──────────────────
+// These map to the system cursor set shown in the cursor reference image:
+//   move       → Sizeall   (4-way arrows ✛)
+//   nwse-resize→ Sizenwse  (↖↘ diagonal, for TL & BR corners)
+//   nesw-resize→ Sizenesw  (↗↙ diagonal, for TR & BL corners)
+//   ns-resize  → Sizens    (↕ vertical,  for top & bottom edges)
+//   ew-resize  → Sizeew    (↔ horizontal, for left & right edges)
+//   crosshair  → Crosshair (+ for rotation handle)
+//   text       → Ibeam     (I-beam for text objects)
+//   grab       → Hand      (open hand on hover-drag)
+//   grabbing   → (closed hand while dragging)
+//   default    → Arrow     (empty canvas)
+// No custom SVG needed — browser renders native OS shapes.
 
 // ── Apply fabric v7 global selection style defaults ───────────────────────────
 const CORNER_SIZE = 8;
@@ -98,11 +105,17 @@ function renderRotateHandle(ctx, left, top, _styleOverride, fabricObject) {
 function applyCustomControls(obj) {
   if (!obj || !obj.controls) return;
 
-  // Diagonal resize — angle-aware (fabric passes angle but we use fixed 8-way)
+  // Per-corner resize cursors (native OS shapes)
   const corners = ['tl', 'tr', 'bl', 'br'];
-  const cornerCursors = { tl: 'nw-resize', tr: 'ne-resize', bl: 'sw-resize', br: 'se-resize' };
+  const cornerCursors = {
+    tl: 'nwse-resize', tr: 'nesw-resize',
+    bl: 'nesw-resize', br: 'nwse-resize',
+  };
   const edges = ['mt', 'mb', 'ml', 'mr'];
-  const edgeCursors = { mt: 'ns-resize', mb: 'ns-resize', ml: 'ew-resize', mr: 'ew-resize' };
+  const edgeCursors = {
+    mt: 'ns-resize', mb: 'ns-resize',
+    ml: 'ew-resize', mr: 'ew-resize',
+  };
 
   corners.forEach(key => {
     if (obj.controls[key]) {
@@ -124,7 +137,7 @@ function applyCustomControls(obj) {
 
   if (obj.controls['mtr']) {
     obj.controls['mtr'].render = renderRotateHandle;
-    obj.controls['mtr'].cursorStyle = ROTATE_CURSOR;
+    obj.controls['mtr'].cursorStyle = 'crosshair';  // Crosshair for rotate
     obj.controls['mtr'].sizeX = 12;
     obj.controls['mtr'].sizeY = 12;
   }
@@ -216,68 +229,34 @@ export default function Canvas({
     });
     fabricRef.current = canvas;
 
-    // ── Context-sensitive cursors (Canva / Photoshop style) ──────────────
-    // We use a raw DOM mousemove so we run AFTER Fabric's internal handler
-    // and can read canvas.__corner (set by Fabric during its own processing).
-    const CTRL_CURSOR = {
-      tl:  'nw-resize',
-      tr:  'ne-resize',
-      bl:  'sw-resize',
-      br:  'se-resize',
-      mt:  'ns-resize',
-      mb:  'ns-resize',
-      ml:  'ew-resize',
-      mr:  'ew-resize',
-      mtr: 'grab',
-    };
-    let isDragging = false;
+    // ── Context-sensitive cursors ─────────────────────────────────────────
+    // Fabric automatically reads `cursorStyle` from controls and calls
+    // canvas.setCursor(). We only need to set the defaults + text special-case.
+    canvas.defaultCursor  = 'default';   // Arrow — empty canvas
+    canvas.hoverCursor    = 'move';      // Sizeall — hovering any object
+    canvas.moveCursor     = 'grabbing';  // grabbing — while moving
 
+    // Per-object type: text gets I-beam, everything else gets move
+    canvas.on('mouse:over', (e) => {
+      if (!e.target || e.target.isGuide || e.target.__isBlankLayer) return;
+      e.target.hoverCursor =
+        (e.target.type === 'i-text' || e.target.type === 'textbox')
+          ? 'text'    // Ibeam
+          : 'move';   // Sizeall
+    });
+
+    // Grabbing cursor while dragging
     const upper = canvas.upperCanvasEl;
-    const onDomMouseMove = () => {
-      if (!upper || isDragging) return;
-      if (canvas.isDrawingMode) { upper.style.cursor = 'crosshair'; return; }
-
-      // canvas.__corner is set by Fabric internally when a control is hovered
-      const corner = canvas.__corner;
-      if (corner && CTRL_CURSOR[corner]) {
-        upper.style.cursor = CTRL_CURSOR[corner];
-        return;
-      }
-
-      // Check what object (if any) is the active target under pointer
-      const activeObj = canvas.getActiveObject();
-      if (activeObj && !activeObj.__isBlankLayer && canvas._target === activeObj) {
-        upper.style.cursor = MOVE_CURSOR;
-        return;
-      }
-
-      // Hovering over any non-active object
-      const target = canvas._target;   // Fabric stores last findTarget result here
-      if (target && !target.isGuide && !target.__isBlankLayer) {
-        if (target.type === 'i-text' || target.type === 'textbox') {
-          upper.style.cursor = 'text';
-        } else {
-          upper.style.cursor = MOVE_CURSOR;
-        }
-        return;
-      }
-
-      // Empty canvas
-      upper.style.cursor = 'default';
-    };
-
-    if (upper) upper.addEventListener('mousemove', onDomMouseMove);
-
     canvas.on('mouse:down', (e) => {
       if (e.target && !e.target.isGuide && !canvas.isDrawingMode) {
-        isDragging = true;
-        if (upper) upper.style.cursor = GRAB_CURSOR;
+        if (upper) upper.style.cursor = 'grabbing';
       }
     });
     canvas.on('mouse:up', () => {
-      isDragging = false;
-      if (upper) upper.style.cursor = 'default';
+      // Let Fabric reset cursor on next mousemove naturally
+      if (upper) upper.style.cursor = '';
     });
+
 
 
     // Object events
