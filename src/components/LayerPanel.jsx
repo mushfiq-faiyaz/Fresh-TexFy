@@ -439,8 +439,7 @@ function AddLayerBtn({ onAddLayer }) {
 }
 
 /* ─── Main LayerPanel ───────────────────────────────────────────────────── */
-const VISIBLE_ROWS = 4;
-const ROW_H = 56; // 50px row + 4px margin + 2px buffer
+const MAX_LIST_H = 240; // ~4 rows visible before scrolling kicks in
 
 export default function LayerPanel({
   layers,
@@ -453,33 +452,8 @@ export default function LayerPanel({
   fabricRef,
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const listRef = useRef(null);
-
-  useEffect(() => {
-    if (!expanded) setScrollOffset(0);
-  }, [expanded]);
 
   const totalLayers = layers.length;
-  const maxOffset = Math.max(0, totalLayers - VISIBLE_ROWS);
-  const visibleLayers = layers.slice(scrollOffset, scrollOffset + VISIBLE_ROWS);
-  const hasMore = totalLayers > VISIBLE_ROWS && scrollOffset + VISIBLE_ROWS < totalLayers;
-
-  const handleWheel = (e) => {
-    if (!expanded) return;
-    e.preventDefault();
-    if (e.deltaY > 0) {
-      setScrollOffset(o => Math.min(o + 1, maxOffset));
-    } else {
-      setScrollOffset(o => Math.max(0, o - 1));
-    }
-  };
-
-  const headerH = 38;
-  const footerH = hasMore ? 32 : 0;
-  const upFootH = scrollOffset > 0 ? 32 : 0;
-  const listH = visibleLayers.length * ROW_H;
-  const expandedH = headerH + 10 + listH + footerH + upFootH + 12;
 
   return (
     <div
@@ -488,9 +462,32 @@ export default function LayerPanel({
         left: 16,
         bottom: 16,
         zIndex: 50,
-        width: 268,
+        width: 272,
       }}
     >
+      {/* Custom scrollbar styles injected once */}
+      <style>{`
+        .texfy-layer-list {
+          overflow-y: auto;
+          max-height: ${MAX_LIST_H}px;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(99,102,241,0.5) transparent;
+        }
+        .texfy-layer-list::-webkit-scrollbar {
+          width: 4px;
+        }
+        .texfy-layer-list::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .texfy-layer-list::-webkit-scrollbar-thumb {
+          background: rgba(99,102,241,0.45);
+          border-radius: 99px;
+        }
+        .texfy-layer-list::-webkit-scrollbar-thumb:hover {
+          background: rgba(139,92,246,0.75);
+        }
+      `}</style>
+
       <div
         style={{
           background: 'rgba(12,12,22,0.92)',
@@ -500,7 +497,6 @@ export default function LayerPanel({
           borderRadius: 12,
           overflow: 'hidden',
           boxShadow: '0 12px 40px rgba(0,0,0,0.55)',
-          transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
         {/* ── Header ── */}
@@ -555,87 +551,48 @@ export default function LayerPanel({
         {/* ── Layer list (animated expand) ── */}
         <div
           style={{
-            maxHeight: expanded ? `${expandedH}px` : '0px',
+            maxHeight: expanded ? `${MAX_LIST_H + 24}px` : '0px',
             overflow: 'hidden',
             transition: 'max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1)',
           }}
         >
-          <div
-            ref={listRef}
-            onWheel={handleWheel}
-            style={{ padding: '0 8px 8px 8px' }}
-          >
-            {totalLayers === 0 ? (
-              <div style={{
-                textAlign: 'center',
-                padding: '16px 0',
-                fontSize: 11,
-                color: 'rgba(255,255,255,0.25)',
-                fontStyle: 'italic',
-              }}>
-                No layers yet — press <strong style={{ color: 'rgba(255,255,255,0.4)' }}>+</strong> to add
-              </div>
-            ) : (
-              <>
-                {/* Separator */}
-                <div style={{
-                  height: 1,
-                  background: 'rgba(255,255,255,0.07)',
-                  marginBottom: 8,
-                }} />
+          {/* Separator */}
+          <div style={{
+            height: 1,
+            background: 'rgba(255,255,255,0.07)',
+            margin: '0 8px',
+          }} />
 
-                {/* Scroll up button */}
-                {scrollOffset > 0 && (
-                  <button
-                    onClick={() => setScrollOffset(o => Math.max(0, o - 1))}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                      width: '100%', marginBottom: 4,
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.07)',
-                      borderRadius: 6, color: 'rgba(255,255,255,0.4)',
-                      fontSize: 11, cursor: 'pointer', padding: '5px 0',
-                    }}
-                  >
-                    <span>⌃</span><span>Scroll up</span>
-                  </button>
-                )}
-
-                {visibleLayers.map((layer) => (
-                  <LayerRow
-                    key={layer.id}
-                    layer={layer}
-                    isActive={layer.id === activeLayerId}
-                    onSelect={() => onSelectLayer(layer.id)}
-                    onToggleVisibility={() => onToggleVisibility(layer.id)}
-                    onToggleLock={() => onToggleLock(layer.id)}
-                    onDelete={() => onDeleteLayer(layer.id)}
-                    fabricRef={fabricRef}
-                  />
-                ))}
-
-                {/* More layers button */}
-                {hasMore && (
-                  <button
-                    onClick={() => setScrollOffset(o => Math.min(o + 1, maxOffset))}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                      width: '100%', marginTop: 2,
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.07)',
-                      borderRadius: 6, color: 'rgba(255,255,255,0.4)',
-                      fontSize: 11, cursor: 'pointer', padding: '5px 0',
-                    }}
-                  >
-                    <span>⌄</span>
-                    <span>More layers ({totalLayers - scrollOffset - VISIBLE_ROWS} hidden)</span>
-                  </button>
-                )}
-              </>
-            )}
-          </div>
+          {totalLayers === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '16px 0',
+              fontSize: 11,
+              color: 'rgba(255,255,255,0.25)',
+              fontStyle: 'italic',
+            }}>
+              No layers yet — press <strong style={{ color: 'rgba(255,255,255,0.4)' }}>+</strong> to add
+            </div>
+          ) : (
+            /* Real scrollable list */
+            <div className="texfy-layer-list" style={{ padding: '6px 8px 8px 8px' }}>
+              {layers.map((layer) => (
+                <LayerRow
+                  key={layer.id}
+                  layer={layer}
+                  isActive={layer.id === activeLayerId}
+                  onSelect={() => onSelectLayer(layer.id)}
+                  onToggleVisibility={() => onToggleVisibility(layer.id)}
+                  onToggleLock={() => onToggleLock(layer.id)}
+                  onDelete={() => onDeleteLayer(layer.id)}
+                  fabricRef={fabricRef}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
+
