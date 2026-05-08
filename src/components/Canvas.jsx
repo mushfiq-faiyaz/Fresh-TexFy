@@ -2150,14 +2150,6 @@ export default function Canvas({
       >
         <canvas ref={canvasElRef} className="canvas-element" />
 
-        {/* Resize handles at all 4 corners */}
-        {(['nw', 'ne', 'sw', 'se']).map(corner => (
-          <div
-            key={corner}
-            className={`canvas-resize-handle resize-${corner}`}
-            onMouseDown={(e) => handleResizeMouseDown(e, corner)}
-          />
-        ))}
 
         {/* Floating delete button — macOS/Canva style, centered above selection */}
         {selectedObj && deletePos && (
