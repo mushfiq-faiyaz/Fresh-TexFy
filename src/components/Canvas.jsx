@@ -185,6 +185,7 @@ export default function Canvas({
   onToggleVisibility,
   onToggleLock,
   onDeleteLayer,
+  onReorderLayers,
 }) {
   const canvasElRef = useRef(null);
   const canvasWrapperRef = useRef(null);
@@ -2213,6 +2214,7 @@ export default function Canvas({
         onToggleLock={onToggleLock}
         onDeleteLayer={onDeleteLayer}
         onAddLayer={addBlankLayer}
+        onReorderLayers={onReorderLayers}
         fabricRef={fabricRef}
       />
 

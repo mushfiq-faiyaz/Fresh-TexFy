@@ -260,8 +260,24 @@ function LayerPreviewPopup({ layer, fabricRef, anchorRect }) {
   );
 }
 
+/* ─── Grip handle icon ──────────────────────────────────────────────────── */
+function GripIcon() {
+  return (
+    <svg width="10" height="14" viewBox="0 0 10 14" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      {[0, 4].map(cx =>
+        [2, 6, 10].map(cy => (
+          <circle key={`${cx}-${cy}`} cx={cx + 1} cy={cy + 2} r="1.2" fill="rgba(255,255,255,0.4)" />
+        ))
+      )}
+    </svg>
+  );
+}
+
 /* ─── Single layer row ──────────────────────────────────────────────────── */
-function LayerRow({ layer, isActive, onSelect, onToggleVisibility, onToggleLock, onDelete, fabricRef }) {
+function LayerRow({
+  layer, isActive, onSelect, onToggleVisibility, onToggleLock, onDelete, fabricRef,
+  isDragging, dropIndicator, onDragStart, onDragOver, onDragEnd, onDrop,
+}) {
   const [hovered, setHovered] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
   const [anchorRect, setAnchorRect] = useState(null);
@@ -283,8 +299,22 @@ function LayerRow({ layer, isActive, onSelect, onToggleVisibility, onToggleLock,
 
   return (
     <>
+      {/* Drop indicator ABOVE */}
+      {dropIndicator === 'before' && (
+        <div style={{
+          height: 2, borderRadius: 2, margin: '0 4px 2px 4px',
+          background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+          boxShadow: '0 0 6px rgba(99,102,241,0.7)',
+        }} />
+      )}
+
       <div
         ref={rowRef}
+        draggable
+        onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart?.(layer.id); }}
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; onDragOver?.(layer.id, e); }}
+        onDragEnd={() => onDragEnd?.()}
+        onDrop={(e) => { e.preventDefault(); onDrop?.(layer.id); }}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -294,15 +324,19 @@ function LayerRow({ layer, isActive, onSelect, onToggleVisibility, onToggleLock,
           marginBottom: 4,
           border: isActive
             ? '1px solid rgba(99,102,241,0.7)'
-            : '1px solid rgba(255,255,255,0.06)',
+            : dropIndicator
+              ? '1px solid rgba(99,102,241,0.35)'
+              : '1px solid rgba(255,255,255,0.06)',
           background: isActive
             ? 'rgba(99,102,241,0.18)'
             : hovered
               ? 'rgba(255,255,255,0.09)'
               : 'rgba(22,22,40,0.85)',
-          transition: 'background 0.15s, border-color 0.15s',
+          opacity: isDragging ? 0.35 : 1,
+          transition: 'background 0.15s, border-color 0.15s, opacity 0.15s',
           overflow: 'hidden',
           position: 'relative',
+          userSelect: 'none',
         }}
         onMouseEnter={() => { setHovered(true); handleRowEnter(); }}
         onMouseLeave={() => { setHovered(false); handleRowLeave(); }}
@@ -310,51 +344,41 @@ function LayerRow({ layer, isActive, onSelect, onToggleVisibility, onToggleLock,
       >
         {/* Left accent bar */}
         <div style={{
-          width: 3,
-          height: '100%',
+          width: 3, height: '100%', flexShrink: 0,
+          borderRadius: '3px 0 0 3px',
           background: isActive
             ? 'linear-gradient(180deg, #6366f1, #8b5cf6)'
             : 'rgba(255,255,255,0.08)',
-          flexShrink: 0,
-          borderRadius: '3px 0 0 3px',
           transition: 'background 0.15s',
         }} />
 
+        {/* Drag grip */}
+        <div
+          style={{ padding: '0 4px 0 5px', flexShrink: 0, cursor: 'grab', display: 'flex', alignItems: 'center', opacity: hovered ? 0.8 : 0.25, transition: 'opacity 0.15s' }}
+          title="Drag to reorder"
+        >
+          <GripIcon />
+        </div>
+
         {/* Layer number */}
         <span style={{
-          width: 20,
-          textAlign: 'center',
-          fontSize: 10,
+          width: 16, textAlign: 'center', fontSize: 10,
           color: isActive ? '#a5b4fc' : 'rgba(255,255,255,0.3)',
-          fontWeight: 700,
-          flexShrink: 0,
-          fontVariantNumeric: 'tabular-nums',
-          marginLeft: 4,
+          fontWeight: 700, flexShrink: 0, fontVariantNumeric: 'tabular-nums',
         }}>
           {layer.number}
         </span>
 
-        {/* Thumbnail — inline, no separate hover zone needed */}
-        <div
-          style={{
-            marginLeft: 6,
-            marginRight: 6,
-            flexShrink: 0,
-            borderRadius: 5,
-            overflow: 'hidden',
-          }}
-        >
+        {/* Thumbnail */}
+        <div style={{ marginLeft: 5, marginRight: 5, flexShrink: 0, borderRadius: 5, overflow: 'hidden' }}>
           <LayerThumbnail layer={layer} fabricRef={fabricRef} />
         </div>
 
         {/* Layer name */}
         <span style={{
-          flex: 1,
-          fontSize: 11,
+          flex: 1, fontSize: 11,
           color: layer.visible ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.3)',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           paddingRight: 2,
           fontStyle: layer.visible ? 'normal' : 'italic',
           fontWeight: isActive ? 600 : 400,
@@ -364,41 +388,40 @@ function LayerRow({ layer, isActive, onSelect, onToggleVisibility, onToggleLock,
 
         {/* Icon buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 1, paddingRight: 5, flexShrink: 0 }}>
-          <IconBtn
-            onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
+          <IconBtn onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
             title={layer.visible ? 'Hide layer' : 'Show layer'}
-            color={layer.visible ? undefined : '#ef4444'}
-          >
+            color={layer.visible ? undefined : '#ef4444'}>
             <EyeIcon hidden={!layer.visible} />
           </IconBtn>
-          <IconBtn
-            onClick={(e) => { e.stopPropagation(); onToggleLock(); }}
+          <IconBtn onClick={(e) => { e.stopPropagation(); onToggleLock(); }}
             title={layer.locked ? 'Unlock layer' : 'Lock layer'}
-            color={layer.locked ? '#f59e0b' : undefined}
-          >
+            color={layer.locked ? '#f59e0b' : undefined}>
             <LockIcon locked={layer.locked} />
           </IconBtn>
-          <IconBtn
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            title="Delete layer"
-            danger
-          >
+          <IconBtn onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Delete layer" danger>
             <TrashIcon />
           </IconBtn>
         </div>
       </div>
 
-      {/* Popup preview portal */}
+      {/* Drop indicator BELOW */}
+      {dropIndicator === 'after' && (
+        <div style={{
+          height: 2, borderRadius: 2, margin: '-2px 4px 4px 4px',
+          background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+          boxShadow: '0 0 6px rgba(99,102,241,0.7)',
+        }} />
+      )}
+
+      {/* Hover popup */}
       {showPopup && anchorRect && (
-        <LayerPreviewPopup
-          layer={layer}
-          fabricRef={fabricRef}
-          anchorRect={anchorRect}
-        />
+        <LayerPreviewPopup layer={layer} fabricRef={fabricRef} anchorRect={anchorRect} />
       )}
     </>
   );
 }
+
+
 
 /* ─── Add-layer \"+\" button ──────────────────────────────────────────────── */
 function AddLayerBtn({ onAddLayer }) {
@@ -449,11 +472,41 @@ export default function LayerPanel({
   onToggleLock,
   onDeleteLayer,
   onAddLayer,
+  onReorderLayers,
   fabricRef,
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded,   setExpanded]   = useState(false);
+  const [dragId,     setDragId]     = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+  const [dropPos,    setDropPos]    = useState('before');
 
+  // Front-to-back order (panel top = frontmost, like Canva)
+  const displayLayers = [...layers].reverse();
   const totalLayers = layers.length;
+
+  const handleDragStart = (id) => setDragId(id);
+
+  const handleDragOver = (id, e) => {
+    if (id === dragId) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setDragOverId(id);
+    setDropPos(e.clientY < rect.top + rect.height / 2 ? 'before' : 'after');
+  };
+
+  const handleDrop = (targetId) => {
+    if (!dragId || dragId === targetId) { handleDragEnd(); return; }
+    const fromIdx = displayLayers.findIndex(l => l.id === dragId);
+    const toIdx   = displayLayers.findIndex(l => l.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) { handleDragEnd(); return; }
+    const newDisplay = displayLayers.filter(l => l.id !== dragId);
+    let insertAt = newDisplay.findIndex(l => l.id === targetId);
+    if (dropPos === 'after') insertAt += 1;
+    newDisplay.splice(insertAt, 0, displayLayers[fromIdx]);
+    onReorderLayers?.(newDisplay.map(l => l.id));
+    handleDragEnd();
+  };
+
+  const handleDragEnd = () => { setDragId(null); setDragOverId(null); };
 
   return (
     <div
@@ -576,7 +629,7 @@ export default function LayerPanel({
           ) : (
             /* Real scrollable list */
             <div className="texfy-layer-list" style={{ padding: '6px 8px 8px 8px' }}>
-              {layers.map((layer) => (
+              {displayLayers.map((layer) => (
                 <LayerRow
                   key={layer.id}
                   layer={layer}
@@ -586,6 +639,12 @@ export default function LayerPanel({
                   onToggleLock={() => onToggleLock(layer.id)}
                   onDelete={() => onDeleteLayer(layer.id)}
                   fabricRef={fabricRef}
+                  isDragging={dragId === layer.id}
+                  dropIndicator={dragOverId === layer.id ? dropPos : null}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragEnd={handleDragEnd}
+                  onDrop={handleDrop}
                 />
               ))}
             </div>

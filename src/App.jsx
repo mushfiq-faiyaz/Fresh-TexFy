@@ -129,6 +129,41 @@ export default function App() {
     setActiveLayerId(prev => (prev === id ? null : prev));
   }, []);
 
+  // ── Reorder layers (drag-and-drop in panel) ───────────
+  // orderedIds: array of layer IDs from PANEL TOP → BOTTOM
+  // Panel top = canvas front (highest z-index)
+  // Panel bottom = canvas back (lowest z-index)
+  const handleReorderLayers = useCallback((orderedIds) => {
+    setLayers(prev => {
+      // Build new layers array in panel order (front→back)
+      const frontToBack = orderedIds
+        .map(id => prev.find(l => l.id === id))
+        .filter(Boolean);
+
+      // Sync fabric canvas: frontToBack[0] = front = highest canvas index
+      const canvas = fabricRef.current;
+      if (canvas) {
+        frontToBack.forEach((layer, panelIdx) => {
+          const obj = canvas.getObjects().find(o => o.__layerId === layer.id);
+          if (!obj) return;
+          // panelIdx 0 = front = canvas index (n-1), last = back = canvas index 0
+          const targetIdx = frontToBack.length - 1 - panelIdx;
+          // Move object to target index in the canvas stack
+          const objs = canvas._objects;
+          const cur = objs.indexOf(obj);
+          if (cur !== -1 && cur !== targetIdx) {
+            objs.splice(cur, 1);
+            objs.splice(targetIdx, 0, obj);
+          }
+        });
+        canvas.requestRenderAll();
+      }
+
+      // Store layers front-to-back so panel display (which reverses) shows top=front
+      return frontToBack;
+    });
+  }, [fabricRef]);
+
   // ── Panel: select layer → select fabric object ────────
   const handleSelectLayer = useCallback((layerId) => {
     const canvas = fabricRef.current;
@@ -258,6 +293,7 @@ export default function App() {
           onToggleVisibility={handleToggleVisibility}
           onToggleLock={handleToggleLock}
           onDeleteLayer={handleDeleteLayer}
+          onReorderLayers={handleReorderLayers}
         />
         <RightSidebar
           selectedObj={selectedObj}
