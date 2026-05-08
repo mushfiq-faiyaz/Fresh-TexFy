@@ -196,6 +196,44 @@ function IconBtn({ children, onClick, title, color, danger }) {
   );
 }
 
+/* ─── Add-layer "+" button ──────────────────────────────────────────────── */
+function AddLayerBtn({ onAddLayer }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button
+      onClick={onAddLayer}
+      title="Add new text layer (T)"
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        width: 26,
+        height: 26,
+        borderRadius: 7,
+        flexShrink: 0,
+        marginRight: 8,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: hov
+          ? 'linear-gradient(135deg, rgba(99,102,241,0.45) 0%, rgba(139,92,246,0.35) 100%)'
+          : 'linear-gradient(135deg, rgba(99,102,241,0.22) 0%, rgba(139,92,246,0.15) 100%)',
+        border: hov
+          ? '1px solid rgba(139,92,246,0.75)'
+          : '1px solid rgba(99,102,241,0.4)',
+        color: hov ? '#c4b5fd' : '#a5b4fc',
+        fontSize: 16,
+        fontWeight: 700,
+        lineHeight: 1,
+        cursor: 'pointer',
+        transition: 'all 0.15s ease',
+        boxShadow: hov ? '0 0 10px rgba(99,102,241,0.35)' : 'none',
+      }}
+    >
+      +
+    </button>
+  );
+}
+
 /* ─── Main LayerPanel ───────────────────────────────────────────────────── */
 const VISIBLE_ROWS = 5;
 
@@ -206,6 +244,7 @@ export default function LayerPanel({
   onToggleVisibility,
   onToggleLock,
   onDeleteLayer,
+  onAddLayer,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -261,52 +300,57 @@ export default function LayerPanel({
         }}
       >
         {/* ── Toggle header ── */}
-        <button
-          onClick={() => setExpanded(e => !e)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            width: '100%',
-            padding: '8px 12px',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'rgba(255,255,255,0.85)',
-            fontSize: 13,
-            fontWeight: 600,
-            letterSpacing: '0.02em',
-          }}
-        >
-          {/* Layers "target" icon */}
-          <span style={{ fontSize: 15, lineHeight: 1 }}>⊙</span>
-          <span>Layers</span>
-          {/* Count badge */}
-          {totalLayers > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <button
+            onClick={() => setExpanded(e => !e)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flex: 1,
+              padding: '8px 8px 8px 12px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'rgba(255,255,255,0.85)',
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: '0.02em',
+            }}
+          >
+            {/* Layers "target" icon */}
+            <span style={{ fontSize: 15, lineHeight: 1 }}>⊙</span>
+            <span>Layers</span>
+            {/* Count badge */}
+            {totalLayers > 0 && (
+              <span style={{
+                background: 'rgba(99,102,241,0.35)',
+                color: '#a5b4fc',
+                borderRadius: 10,
+                padding: '1px 7px',
+                fontSize: 10,
+                fontWeight: 700,
+                marginLeft: 2,
+              }}>
+                {totalLayers}
+              </span>
+            )}
+            {/* Chevron rotates on expand */}
             <span style={{
-              background: 'rgba(99,102,241,0.35)',
-              color: '#a5b4fc',
-              borderRadius: 10,
-              padding: '1px 7px',
-              fontSize: 10,
-              fontWeight: 700,
-              marginLeft: 2,
+              marginLeft: 'auto',
+              fontSize: 11,
+              opacity: 0.5,
+              transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s',
+              display: 'inline-block',
             }}>
-              {totalLayers}
+              ▶
             </span>
-          )}
-          {/* Chevron rotates on expand */}
-          <span style={{
-            marginLeft: 'auto',
-            fontSize: 11,
-            opacity: 0.5,
-            transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
-            transition: 'transform 0.2s',
-            display: 'inline-block',
-          }}>
-            ▶
-          </span>
-        </button>
+          </button>
+
+          {/* ── Add Layer (+) button ── */}
+          <AddLayerBtn onAddLayer={() => { onAddLayer?.(); setExpanded(true); }} />
+        </div>
 
         {/* ── Layer list (animated expand) ── */}
         <div
@@ -329,7 +373,7 @@ export default function LayerPanel({
                 color: 'rgba(255,255,255,0.25)',
                 fontStyle: 'italic',
               }}>
-                No layers yet — add text to begin
+                No layers yet — press <strong style={{ color: 'rgba(255,255,255,0.4)' }}>+</strong> to add
               </div>
             ) : (
               <>

@@ -280,19 +280,161 @@ export default function Canvas({
       }
     });
 
-    // ── Delete key ───────────────────────────────────
+    // ── Keyboard shortcuts ───────────────────────────
+    let _clipboard = null; // local clipboard for copy/paste
+
     const onKeyDown = (e) => {
+      const isTyping =
+        document.activeElement.tagName === 'INPUT' ||
+        document.activeElement.tagName === 'TEXTAREA';
+
       const active = canvas.getActiveObject();
-      if (!active) return;
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (document.activeElement.tagName !== 'INPUT' &&
-          document.activeElement.tagName !== 'TEXTAREA' &&
-          !active.isEditing) {
-          canvas.remove(active);
-          canvas.discardActiveObject();
-          canvas.renderAll();
-          setSelectedObj(null);
+      const isEditing = active?.isEditing;
+
+      // ── Ctrl / Cmd combos ──────────────────────────
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key.toLowerCase()) {
+          // Undo
+          case 'z':
+            if (!isTyping) {
+              e.preventDefault();
+              document.dispatchEvent(new CustomEvent('texfy-undo'));
+            }
+            break;
+
+          // Redo (Ctrl+Y or Ctrl+Shift+Z)
+          case 'y':
+            if (!isTyping) {
+              e.preventDefault();
+              document.dispatchEvent(new CustomEvent('texfy-redo'));
+            }
+            break;
+
+          // Copy
+          case 'c':
+            if (!isEditing && active) {
+              e.preventDefault();
+              active.clone().then(cloned => { _clipboard = cloned; });
+            }
+            break;
+
+          // Cut
+          case 'x':
+            if (!isEditing && active) {
+              e.preventDefault();
+              active.clone().then(cloned => {
+                _clipboard = cloned;
+                canvas.remove(active);
+                canvas.discardActiveObject();
+                canvas.renderAll();
+                setSelectedObj(null);
+              });
+            }
+            break;
+
+          // Paste
+          case 'v':
+            if (!isTyping && _clipboard) {
+              e.preventDefault();
+              _clipboard.clone().then(cloned => {
+                cloned.set({ left: (_clipboard.left ?? 50) + 20, top: (_clipboard.top ?? 50) + 20 });
+                applyCustomControls(cloned);
+                canvas.add(cloned);
+                onLayerAddRef.current(cloned);
+                canvas.setActiveObject(cloned);
+                canvas.requestRenderAll();
+                setSelectedObj(cloned);
+                // Update clipboard offset so repeated pastes cascade
+                _clipboard.left = (_clipboard.left ?? 50) + 20;
+                _clipboard.top  = (_clipboard.top  ?? 50) + 20;
+              });
+            }
+            break;
+
+          // Duplicate (Ctrl+D)
+          case 'd':
+            if (!isEditing && active) {
+              e.preventDefault();
+              active.clone().then(cloned => {
+                cloned.set({ left: active.left + 20, top: active.top + 20 });
+                applyCustomControls(cloned);
+                canvas.add(cloned);
+                onLayerAddRef.current(cloned);
+                canvas.setActiveObject(cloned);
+                canvas.requestRenderAll();
+                setSelectedObj(cloned);
+              });
+            }
+            break;
+
+          // Select All (Ctrl+A)
+          case 'a':
+            if (!isTyping && !isEditing) {
+              e.preventDefault();
+              const objs = canvas.getObjects().filter(o => !o.isGuide && !o.isCenterGuide);
+              if (objs.length > 0) {
+                canvas.setActiveObject(new fabric.ActiveSelection(objs, { canvas }));
+                canvas.requestRenderAll();
+              }
+            }
+            break;
+
+          // Bring Forward (Ctrl+])
+          case ']':
+            if (!isTyping && active) {
+              e.preventDefault();
+              canvas.bringObjectForward(active);
+              canvas.requestRenderAll();
+            }
+            break;
+
+          // Send Backward (Ctrl+[)
+          case '[':
+            if (!isTyping && active) {
+              e.preventDefault();
+              canvas.sendObjectBackwards(active);
+              canvas.requestRenderAll();
+            }
+            break;
+
+          default:
+            break;
         }
+        return;
+      }
+
+      // ── Non-Ctrl keys ──────────────────────────────
+      // Delete / Backspace
+      if ((e.key === 'Delete' || e.key === 'Backspace') && active && !isEditing && !isTyping) {
+        e.preventDefault();
+        canvas.remove(active);
+        canvas.discardActiveObject();
+        canvas.renderAll();
+        setSelectedObj(null);
+        return;
+      }
+
+      // Escape → deselect
+      if (e.key === 'Escape' && active && !isEditing) {
+        canvas.discardActiveObject();
+        canvas.renderAll();
+        setSelectedObj(null);
+        return;
+      }
+
+      // Arrow keys → nudge (1px; 10px with Shift)
+      if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key) && active && !isEditing && !isTyping) {
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1;
+        const delta = {
+          ArrowLeft:  { left: active.left - step },
+          ArrowRight: { left: active.left + step },
+          ArrowUp:    { top:  active.top  - step },
+          ArrowDown:  { top:  active.top  + step },
+        }[e.key];
+        active.set(delta);
+        active.setCoords();
+        canvas.requestRenderAll();
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -322,10 +464,10 @@ export default function Canvas({
 
     // Canva-style guide colors by snap type
     const GUIDE_STYLES = {
-      'canvas-center': { color: '#9b27af', width: 1, dash: [] },       // solid magenta — canvas center axis
-      'canvas-edge':   { color: '#E040FB', width: 1, dash: [6, 4] },   // dashed violet — canvas boundary
-      'obj-center':    { color: '#E040FB', width: 1, dash: [] },        // solid pink — object-center alignment
-      'obj-edge':      { color: '#FF2D78', width: 1, dash: [] },        // solid hot-pink — object edge alignment
+      'canvas-center': { color: '#18a0fb', width: 1, dash: [] },   // Canva blue — canvas center
+      'canvas-edge':   { color: '#18a0fb', width: 1, dash: [] },   // Canva blue — canvas edge
+      'obj-center':    { color: '#18a0fb', width: 1, dash: [] },   // blue — object center align
+      'obj-edge':      { color: '#18a0fb', width: 1, dash: [] },   // blue — object edge align
     };
 
     /** Remove all guide line objects from the canvas */
@@ -534,9 +676,8 @@ export default function Canvas({
     canvas.on('mouse:up',        onMouseUp);
     // ── End Snapping Guide Lines ─────────────────────────
 
-    // ── Centre Crosshair ─────────────────────────────────
-    // Always-visible red crosshair through the CENTRE of whatever is selected.
-    // Separate from snap guides (uses isCenterGuide marker).
+    // ── Centre Crosshair (drag-only) ─────────────────────────────────
+    // Only shows during active dragging — like Canva. Clears when drag ends.
 
     function clearCenterGuides() {
       canvas.getObjects()
@@ -552,30 +693,28 @@ export default function Canvas({
 
       obj.setCoords();
       const bl  = obj.getBoundingRect(true);
-      const cx  = bl.left + bl.width  / 2;  // horizontal center
-      const cy  = bl.top  + bl.height / 2;  // vertical center
+      const cx  = bl.left + bl.width  / 2;
+      const cy  = bl.top  + bl.height / 2;
       const cw  = canvas.getWidth();
       const ch  = canvas.getHeight();
 
       const STYLE = {
-        stroke: '#e53935',
+        stroke: '#18a0fb',        // Canva blue
         strokeWidth: 1,
-        strokeDashArray: [5, 4],
+        strokeDashArray: null,    // solid line, no dash
         selectable: false,
         evented: false,
         hasControls: false,
         hasBorders: false,
         excludeFromExport: true,
-        opacity: 0.7,
+        opacity: 0.85,
       };
 
-      // Vertical line through centre X
       const vLine = new fabric.Line([cx, 0, cx, ch], STYLE);
       vLine.isCenterGuide = true;
       canvas.add(vLine);
       canvas.sendObjectToBack(vLine);
 
-      // Horizontal line through centre Y
       const hLine = new fabric.Line([0, cy, cw, cy], STYLE);
       hLine.isCenterGuide = true;
       canvas.add(hLine);
@@ -584,11 +723,10 @@ export default function Canvas({
       canvas.requestRenderAll();
     }
 
-    canvas.on('selection:created',  drawCenterGuides);
-    canvas.on('selection:updated',  drawCenterGuides);
-    canvas.on('object:moving',      drawCenterGuides);
-    canvas.on('object:modified',    drawCenterGuides);
-    canvas.on('selection:cleared',  clearCenterGuides);
+    // Only draw center guides while actively dragging (Canva behaviour)
+    canvas.on('object:moving',   drawCenterGuides);
+    canvas.on('mouse:up',        clearCenterGuides);   // hide on release
+    canvas.on('selection:cleared', clearCenterGuides);
     // ── End Centre Crosshair ──────────────────────────────
 
     return () => {
@@ -597,11 +735,9 @@ export default function Canvas({
       canvas.off('object:moving',   onObjectMoving);
       canvas.off('object:modified', onObjectModified);
       canvas.off('mouse:up',        onMouseUp);
-      canvas.off('selection:created',  drawCenterGuides);
-      canvas.off('selection:updated',  drawCenterGuides);
-      canvas.off('object:moving',      drawCenterGuides);
-      canvas.off('object:modified',    drawCenterGuides);
-      canvas.off('selection:cleared',  clearCenterGuides);
+      canvas.off('object:moving',   drawCenterGuides);
+      canvas.off('mouse:up',        clearCenterGuides);
+      canvas.off('selection:cleared', clearCenterGuides);
       canvas.dispose();
     };
   }, []);
@@ -1998,6 +2134,7 @@ export default function Canvas({
         onToggleVisibility={onToggleVisibility}
         onToggleLock={onToggleLock}
         onDeleteLayer={onDeleteLayer}
+        onAddLayer={addText}
       />
 
       {/* ── Toast Notification ── */}

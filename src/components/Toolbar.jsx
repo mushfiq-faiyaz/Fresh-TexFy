@@ -1,6 +1,144 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import * as fabric from 'fabric';
 import { jsPDF } from 'jspdf';
+
+/* ── Keyboard shortcuts reference ─────────────────────────────────────── */
+const SHORTCUTS = [
+  { group: 'History',    items: [
+    { keys: ['Ctrl', 'Z'],         label: 'Undo' },
+    { keys: ['Ctrl', 'Y'],         label: 'Redo' },
+  ]},
+  { group: 'Edit',       items: [
+    { keys: ['Ctrl', 'C'],         label: 'Copy' },
+    { keys: ['Ctrl', 'X'],         label: 'Cut' },
+    { keys: ['Ctrl', 'V'],         label: 'Paste' },
+    { keys: ['Ctrl', 'D'],         label: 'Duplicate' },
+    { keys: ['Ctrl', 'A'],         label: 'Select All' },
+    { keys: ['Del'],               label: 'Delete selected' },
+    { keys: ['Esc'],               label: 'Deselect' },
+  ]},
+  { group: 'Move',       items: [
+    { keys: ['↑ ↓ ← →'],          label: 'Nudge 1 px' },
+    { keys: ['Shift', '↑↓←→'],    label: 'Nudge 10 px' },
+  ]},
+  { group: 'Layer Order', items: [
+    { keys: ['Ctrl', ']'],         label: 'Bring Forward' },
+    { keys: ['Ctrl', '['],         label: 'Send Backward' },
+  ]},
+];
+
+function ShortcutsModal({ onClose }) {
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 99999,
+        background: 'rgba(0,0,0,0.55)',
+        backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'rgba(12,12,22,0.97)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 18,
+          padding: '28px 32px',
+          width: 420,
+          maxHeight: '80vh',
+          overflowY: 'auto',
+          boxShadow: '0 24px 80px rgba(0,0,0,0.8)',
+          animation: 'shortcutsIn 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+        }}
+      >
+        <style>{`
+          @keyframes shortcutsIn {
+            from { opacity: 0; transform: scale(0.92) translateY(10px); }
+            to   { opacity: 1; transform: scale(1) translateY(0); }
+          }
+        `}</style>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
+              ⌨️ Keyboard Shortcuts
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>
+              Speed up your workflow
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 8, color: 'rgba(255,255,255,0.6)', cursor: 'pointer',
+              fontSize: 13, fontWeight: 600, padding: '4px 10px',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Groups */}
+        {SHORTCUTS.map(group => (
+          <div key={group.group} style={{ marginBottom: 20 }}>
+            <div style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+              color: 'rgba(167,139,250,0.8)', textTransform: 'uppercase', marginBottom: 8,
+            }}>
+              {group.group}
+            </div>
+            {group.items.map((item, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '6px 0',
+                borderBottom: i < group.items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+              }}>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{item.label}</span>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  {item.keys.map((k, ki) => (
+                    <span key={ki}>
+                      <span style={{
+                        background: 'rgba(99,102,241,0.18)',
+                        border: '1px solid rgba(99,102,241,0.4)',
+                        borderRadius: 5,
+                        padding: '2px 7px',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: '#a5b4fc',
+                        fontFamily: 'monospace',
+                        letterSpacing: '0.02em',
+                      }}>
+                        {k}
+                      </span>
+                      {ki < item.keys.length - 1 && (
+                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', margin: '0 2px' }}>+</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+
+        {/* Footer hint */}
+        <div style={{ marginTop: 8, textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>
+          Press <span style={{ color: 'rgba(255,255,255,0.4)' }}>Esc</span> or click outside to close
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const EXPORT_FORMATS = [
   { key: 'png',  label: '🖼 Export as PNG',  icon: '🖼' },
@@ -13,6 +151,7 @@ const EXPORT_FORMATS = [
 
 export default function Toolbar({ fabricRef, undoStack, setUndoStack, redoStack, setRedoStack }) {
   const [showExport, setShowExport] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const exportRef = useRef(null);
 
   // ── Undo ──────────────────────────────────────────────
@@ -136,6 +275,36 @@ export default function Toolbar({ fabricRef, undoStack, setUndoStack, redoStack,
       >
         ↪
       </button>
+
+      {/* Keyboard shortcuts help */}
+      <button
+        className="btn btn-icon"
+        onClick={() => setShowShortcuts(v => !v)}
+        title="Keyboard shortcuts (?)"
+        style={{
+          width: 30, height: 30,
+          borderRadius: 8,
+          background: showShortcuts
+            ? 'rgba(99,102,241,0.28)'
+            : 'rgba(255,255,255,0.06)',
+          border: showShortcuts
+            ? '1px solid rgba(99,102,241,0.6)'
+            : '1px solid rgba(255,255,255,0.1)',
+          color: showShortcuts ? '#a5b4fc' : 'rgba(255,255,255,0.55)',
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'all 0.15s ease',
+        }}
+      >
+        ?
+      </button>
+
+      {/* Shortcuts modal */}
+      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
 
       {/* Export */}
       <div style={{ position: 'relative' }} ref={exportRef}>
