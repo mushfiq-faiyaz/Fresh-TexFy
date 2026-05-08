@@ -437,10 +437,8 @@ input[type=color]::-webkit-color-swatch {
   background: rgba(255,255,255,0.1);
 }
 
-/* ─── Fabric.js cursor overrides ─────────────────────── */
-.canvas-container canvas {
-  cursor: default !important;
-}
+/* Fabric.js cursor is controlled via JS (canvas.defaultCursor / hoverCursor / mouse:move) */
+/* Do NOT add cursor overrides here — they will block Fabric's cursor management */
 
 /* ─── Font Size Slider Prominence ───────────────────────── */
 .slider-fs {
@@ -475,9 +473,4 @@ input[type=color]::-webkit-color-swatch {
     opacity: 1;
     transform: translateY(-50%) translateX(0) scale(1);
   }
-}
-
-/* ─── Drawing mode cursor ─────────────────────────────── */
-.canvas-container.is-drawing-mode canvas {
-  cursor: crosshair !important;
 }
