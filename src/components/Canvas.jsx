@@ -2079,7 +2079,6 @@ export default function Canvas({
   return (
     <div
       className="canvas-viewport"
-      style={{ position: 'relative' }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}

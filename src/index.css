@@ -19,8 +19,7 @@ body,
 }
 
 body {
-  background: url('./assets/blue.avif') no-repeat center center fixed;
-  background-size: cover;
+  background: #16161f;
   color: #fff;
 }
 
@@ -63,8 +62,8 @@ body {
 
 /* ─── Sidebar general ───────────────────────────────── */
 .sidebar-section {
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 14px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 /* ─── Right Sidebar ─────────────────────────────────── */
@@ -97,76 +96,119 @@ body {
   justify-content: center;
   gap: 6px;
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: 9px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   border: none;
-  transition: all 0.15s ease;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.07);
   white-space: nowrap;
   user-select: none;
 }
 
 .btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.13);
+  color: #fff;
 }
 
 .btn:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 .btn-primary {
   background: linear-gradient(135deg, #7c3aed, #9333ea);
+  color: #fff;
   width: 100%;
+  box-shadow: 0 2px 12px rgba(124, 58, 237, 0.32);
 }
 
 .btn-primary:hover {
   background: linear-gradient(135deg, #6d28d9, #7c3aed);
+  box-shadow: 0 4px 18px rgba(124, 58, 237, 0.48);
 }
 
 .btn-icon {
-  padding: 6px;
-  width: 32px;
-  height: 32px;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.06);
 }
 
+.btn-icon:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* macOS segmented-control style active state */
 .btn-active {
-  background: rgba(124, 58, 237, 0.45) !important;
-  border: 1px solid rgba(147, 51, 234, 0.6);
+  background: rgba(124, 58, 237, 0.38) !important;
+  color: #ddd6ff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
 
 .btn-danger {
-  background: rgba(220, 38, 38, 0.7);
+  background: rgba(220, 38, 38, 0.65);
 }
 
 .btn-danger:hover {
-  background: rgba(220, 38, 38, 0.9);
+  background: rgba(220, 38, 38, 0.88);
 }
 
 .btn-group {
   display: flex;
-  gap: 4px;
+  gap: 5px;
 }
+
+/* ─── Pill-style effect buttons ──────────────────────── */
+.btn-effect {
+  border-radius: 999px !important;
+  padding: 5px 11px !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.55) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+}
+
+.btn-effect:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.88) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+.btn-effect.btn-active {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #18181b !important;
+  border-color: transparent !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3) !important;
+}
+
 
 /* ─── Inputs ─────────────────────────────────────────── */
 .number-input {
   background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
   color: #fff;
   text-align: center;
   font-size: 13px;
   font-family: 'Inter', sans-serif;
   width: 52px;
-  height: 31px;
+  height: 32px;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .number-input:focus {
-  border-color: rgba(124, 58, 237, 0.6);
+  border-color: rgba(124, 58, 237, 0.5);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.14), inset 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
 .number-input::-webkit-inner-spin-button,
@@ -174,58 +216,60 @@ body {
   -webkit-appearance: none;
 }
 
-/* ─── Sliders (Base) ─────────────────────────────────── */
+/* ─── Sliders (macOS-inspired) ─────────────────────────── */
 input[type=range] {
   -webkit-appearance: none;
   appearance: none;
   width: 100% !important;
   min-width: 0;
   display: block;
-  height: 5px;
-  border-radius: 3px;
+  height: 3px;
+  border-radius: 999px;
   outline: none;
   cursor: pointer;
   transition: opacity 0.15s;
 }
 
-/* Thumb — shared white circle with shadow */
+/* Thumb — clean white circle, macOS style */
 input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 15px;
-  height: 15px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   background: #ffffff;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.15);
+  border: none;
+  margin-top: -5px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45), 0 0 0 1.5px rgba(255, 255, 255, 0.25);
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s;
 }
 
 input[type=range]::-webkit-slider-thumb:hover {
-  transform: scale(1.25);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(255, 255, 255, 0.2);
+  transform: scale(1.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55), 0 0 0 3px rgba(255, 255, 255, 0.18);
 }
 
 input[type=range]::-webkit-slider-runnable-track {
-  height: 5px;
-  border-radius: 3px;
+  height: 3px;
+  border-radius: 999px;
 }
 
 /* Firefox */
 input[type=range]::-moz-range-thumb {
-  width: 15px;
-  height: 15px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   background: #ffffff;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+  border: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   cursor: pointer;
 }
 
 input[type=range]::-moz-range-track {
-  height: 5px;
-  border-radius: 3px;
+  height: 3px;
+  border-radius: 999px;
 }
+
 
 /* ─── Zoom Slider ────────────────────────────────────── */
 .zoom-slider {
@@ -239,19 +283,21 @@ input[type=range]::-moz-range-track {
 .font-select {
   width: 100%;
   background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
   color: #fff;
   font-size: 13px;
-  padding: 6px 8px;
+  padding: 7px 10px;
   outline: none;
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
   appearance: none;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .font-select:focus {
-  border-color: rgba(124, 58, 237, 0.6);
+  border-color: rgba(124, 58, 237, 0.5);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
 }
 
 .font-select option {
@@ -260,33 +306,44 @@ input[type=range]::-moz-range-track {
   font-size: 13px;
 }
 
-/* ─── Color Input ─────────────────────────────────────── */
+/* ─── Color Input (circular swatch) ─────────────────── */
 .color-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 input[type=color] {
   -webkit-appearance: none;
   appearance: none;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border: none;
-  border-radius: 6px;
+  border-radius: 50%;
   cursor: pointer;
   background: none;
-  padding: 1px;
+  padding: 2px;
+  flex-shrink: 0;
+  transition: box-shadow 0.15s ease;
+}
+
+input[type=color]:hover {
+  box-shadow: 0 0 0 2.5px rgba(255, 255, 255, 0.45);
+}
+
+input[type=color]:focus {
+  outline: none;
+  box-shadow: 0 0 0 2.5px rgba(124, 58, 237, 0.75);
 }
 
 input[type=color]::-webkit-color-swatch-wrapper {
   padding: 0;
-  border-radius: 5px;
+  border-radius: 50%;
 }
 
 input[type=color]::-webkit-color-swatch {
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 5px;
+  border: none;
+  border-radius: 50%;
 }
 
 /* ─── Canvas Area ─────────────────────────────────────── */
@@ -297,6 +354,9 @@ input[type=color]::-webkit-color-swatch {
   justify-content: center;
   overflow: hidden;
   position: relative;
+  background: #1a1a2e;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
 .canvas-wrapper {
@@ -456,30 +516,33 @@ input[type=color]::-webkit-color-swatch {
 /* Fabric.js cursor is controlled via JS (canvas.defaultCursor / hoverCursor / mouse:move) */
 /* Do NOT add cursor overrides here — they will block Fabric's cursor management */
 
-/* ─── Font Size Slider Prominence ───────────────────────── */
+/* ─── Font Size Slider (slightly prominent) ──────────── */
 .slider-fs {
-  height: 7px !important;
-  border-radius: 4px !important;
+  height: 4px !important;
+  border-radius: 999px !important;
 }
 
 .slider-fs::-webkit-slider-thumb {
-  width: 20px !important;
-  height: 20px !important;
+  width: 15px !important;
+  height: 15px !important;
   background: #ffffff !important;
-  border: 3px solid #7c3aed !important;
-  box-shadow: 0 2px 10px rgba(124, 58, 237, 0.5), 0 0 0 3px rgba(124, 58, 237, 0.15) !important;
+  border: none !important;
+  margin-top: -5.5px !important;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(124, 58, 237, 0.35) !important;
+  transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s !important;
 }
 
 .slider-fs::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
-  box-shadow: 0 3px 14px rgba(124, 58, 237, 0.7), 0 0 0 4px rgba(124, 58, 237, 0.2) !important;
+  transform: scale(1.25) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55), 0 0 0 4px rgba(124, 58, 237, 0.5) !important;
 }
 
 .slider-fs::-moz-range-thumb {
-  width: 20px !important;
-  height: 20px !important;
+  width: 15px !important;
+  height: 15px !important;
   background: #ffffff !important;
-  border: 3px solid #7c3aed !important;
+  border: none !important;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(124, 58, 237, 0.35) !important;
 }
 
 /* ─── Draw Toolbox Animation ──────────────────────────── */

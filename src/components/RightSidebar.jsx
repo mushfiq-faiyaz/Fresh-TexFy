@@ -1,9 +1,9 @@
 const EFFECTS = [
-  { key: 'normal', label: 'Normal', icon: '○' },
-  { key: 'shadow', label: 'Shadow', icon: '◐' },
-  { key: 'glow', label: 'Glow', icon: '✦' },
-  { key: 'outline', label: 'Outline', icon: '◻' },
-  { key: 'neon', label: 'Neon', icon: '⚡' },
+  { key: 'normal',  label: 'Normal',  icon: '◎' },
+  { key: 'shadow',  label: 'Shadow',  icon: '▣' },
+  { key: 'glow',    label: 'Glow',    icon: '✸' },
+  { key: 'outline', label: 'Outline', icon: '▢' },
+  { key: 'neon',    label: 'Neon',    icon: '⚡' },
 ];
 
 // Build CSS for a colored slider track (filled up to current value)
@@ -116,8 +116,8 @@ export default function RightSidebar({
             value={letterSpacing}
             onChange={e => setLetterSpacing(parseFloat(e.target.value))}
             onWheel={onScrollLetterSp}
-            className="slider-blue"
-            style={sliderStyle(letterSpacing, 0, 20, '#1d4ed8', '#60a5fa')}
+            className="slider-purple"
+            style={sliderStyle(letterSpacing, 0, 20, '#7c3aed', '#a78bfa')}
           />
         </div>
 
@@ -134,8 +134,8 @@ export default function RightSidebar({
             value={lineHeight}
             onChange={e => setLineHeight(parseFloat(e.target.value))}
             onWheel={onScrollLineHeight}
-            className="slider-cyan"
-            style={sliderStyle(lineHeight, 1.0, 3.0, '#0891b2', '#67e8f9')}
+            className="slider-purple"
+            style={sliderStyle(lineHeight, 1.0, 3.0, '#7c3aed', '#a78bfa')}
           />
         </div>
       </div>
@@ -154,23 +154,22 @@ export default function RightSidebar({
           value={opacity}
           onChange={e => setOpacity(parseInt(e.target.value))}
           onWheel={onScrollOpacity}
-          className="slider-green"
-          style={sliderStyle(opacity, 0, 100, '#059669', '#6ee7b7')}
+          className="slider-purple"
+          style={sliderStyle(opacity, 0, 100, '#7c3aed', '#a78bfa')}
         />
       </div>
 
       {/* ── TEXT EFFECTS ── */}
       <div className="sidebar-section">
         <div className="section-label">Text Effects</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {EFFECTS.map(ef => (
             <button
               key={ef.key}
-              className={`btn ${effect === ef.key ? 'btn-active' : ''}`}
-              style={{ justifyContent: 'flex-start', gap: 8, fontSize: 12, padding: '5px 8px' }}
+              className={`btn btn-effect ${effect === ef.key ? 'btn-active' : ''}`}
               onClick={() => setEffect(ef.key)}
             >
-              <span style={{ fontSize: 14 }}>{ef.icon}</span>
+              <span style={{ fontSize: 13, lineHeight: 1 }}>{ef.icon}</span>
               {ef.label}
             </button>
           ))}
@@ -191,8 +190,8 @@ export default function RightSidebar({
           value={rotation}
           onChange={e => setRotation(parseInt(e.target.value))}
           onWheel={onScrollRotation}
-          className="slider-orange"
-          style={sliderStyle(rotation, -180, 180, '#d97706', '#fcd34d')}
+          className="slider-purple"
+          style={sliderStyle(rotation, -180, 180, '#7c3aed', '#a78bfa')}
         />
       </div>
 

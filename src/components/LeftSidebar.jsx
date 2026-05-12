@@ -237,31 +237,27 @@ export default function LeftSidebar({
             alignItems: 'center',
             justifyContent: 'center',
             gap: 6,
-            background: isImageSelected
-              ? 'linear-gradient(135deg, rgba(124,58,237,0.25) 0%, rgba(168,85,247,0.18) 100%)'
-              : 'rgba(255,255,255,0.04)',
-            border: isImageSelected
-              ? '1px solid rgba(167,139,250,0.45)'
-              : '1px solid rgba(255,255,255,0.1)',
-            color: isImageSelected ? '#c4b5fd' : 'rgba(255,255,255,0.25)',
+            background: 'transparent',
+            border: `1px solid ${isImageSelected ? 'rgba(124,58,237,0.4)' : 'rgba(255,255,255,0.1)'}`,
+            color: isImageSelected ? 'rgba(196,181,253,0.9)' : 'rgba(255,255,255,0.25)',
             fontWeight: 600,
             fontSize: 12,
             padding: '7px 10px',
-            borderRadius: 7,
+            borderRadius: 9,
             cursor: isImageSelected ? 'pointer' : 'not-allowed',
-            transition: 'background 0.18s, border-color 0.18s, color 0.18s',
+            transition: 'background 0.15s, border-color 0.15s, color 0.15s',
             width: '100%',
-            opacity: isImageSelected ? 1 : 0.55,
+            opacity: isImageSelected ? 1 : 0.45,
           }}
           onMouseEnter={e => {
             if (!isImageSelected) return;
-            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(124,58,237,0.4) 0%, rgba(168,85,247,0.3) 100%)';
-            e.currentTarget.style.borderColor = 'rgba(167,139,250,0.75)';
+            e.currentTarget.style.background = 'rgba(124,58,237,0.12)';
+            e.currentTarget.style.borderColor = 'rgba(124,58,237,0.65)';
           }}
           onMouseLeave={e => {
             if (!isImageSelected) return;
-            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(124,58,237,0.25) 0%, rgba(168,85,247,0.18) 100%)';
-            e.currentTarget.style.borderColor = 'rgba(167,139,250,0.45)';
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.borderColor = 'rgba(124,58,237,0.4)';
           }}
           title={isImageSelected ? 'Separate image into color layers' : 'Select an image first'}
         >
@@ -456,36 +452,15 @@ export default function LeftSidebar({
             </option>
           ))}
         </select>
-        {/* Preview strip — shows selected font name rendered in that font */}
-        <div
-          style={{
-            marginTop: 6,
-            padding: '5px 8px',
-            background: 'rgba(255,255,255,0.05)',
-            borderRadius: 5,
-            border: '1px solid rgba(255,255,255,0.08)',
-            fontFamily: fontFamily,
-            fontSize: 15,
-            color: 'rgba(255,255,255,0.9)',
-            textAlign: 'center',
-            letterSpacing: '0.01em',
-            overflow: 'hidden',
-            whiteSpace: 'nowrap',
-            textOverflow: 'ellipsis',
-          }}
-          title={`Preview: ${fontFamily}`}
-        >
-          {fontFamily}
-        </div>
+
       </div>
 
-      {/* ── STYLE ── */}
       <div className="sidebar-section">
         <div className="section-label">Style</div>
         <div className="btn-group">
           <button
             className={`btn btn-icon ${bold ? 'btn-active' : ''}`}
-            style={{ fontWeight: 700, fontSize: 13, width: '33%' }}
+            style={{ fontWeight: 700, flex: 1 }}
             onClick={() => setBold(b => !b)}
             title="Bold"
           >
@@ -493,7 +468,7 @@ export default function LeftSidebar({
           </button>
           <button
             className={`btn btn-icon ${italic ? 'btn-active' : ''}`}
-            style={{ fontStyle: 'italic', fontSize: 13, width: '33%' }}
+            style={{ fontStyle: 'italic', flex: 1 }}
             onClick={() => setItalic(i => !i)}
             title="Italic"
           >
@@ -501,7 +476,7 @@ export default function LeftSidebar({
           </button>
           <button
             className={`btn btn-icon ${underline ? 'btn-active' : ''}`}
-            style={{ textDecoration: 'underline', fontSize: 13, width: '33%' }}
+            style={{ textDecoration: 'underline', flex: 1 }}
             onClick={() => setUnderline(u => !u)}
             title="Underline"
           >
@@ -515,24 +490,24 @@ export default function LeftSidebar({
         <div className="section-label">Alignment</div>
         <div className="btn-group">
           <button
-            className={`btn ${align === 'left' ? 'btn-active' : ''}`}
-            style={{ flex: 1, fontSize: 14, padding: '5px 4px' }}
+            className={`btn btn-icon ${align === 'left' ? 'btn-active' : ''}`}
+            style={{ flex: 1, fontSize: 15 }}
             onClick={() => setAlign('left')}
             title="Left align"
           >
             ≡
           </button>
           <button
-            className={`btn ${align === 'center' ? 'btn-active' : ''}`}
-            style={{ flex: 1, fontSize: 14, padding: '5px 4px' }}
+            className={`btn btn-icon ${align === 'center' ? 'btn-active' : ''}`}
+            style={{ flex: 1, fontSize: 15 }}
             onClick={() => setAlign('center')}
             title="Center align"
           >
             ☰
           </button>
           <button
-            className={`btn ${align === 'right' ? 'btn-active' : ''}`}
-            style={{ flex: 1, fontSize: 14, padding: '5px 4px' }}
+            className={`btn btn-icon ${align === 'right' ? 'btn-active' : ''}`}
+            style={{ flex: 1, fontSize: 15 }}
             onClick={() => setAlign('right')}
             title="Right align"
           >
@@ -562,26 +537,29 @@ export default function LeftSidebar({
               title="Background color"
             />
             <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>BG Color</span>
-            {/* Show current bg color as swatch label */}
+            {/* Show current bg color as hex label */}
             <span
               style={{
                 marginLeft: 'auto',
                 fontSize: 10,
-                color: 'rgba(255,255,255,0.4)',
-                fontVariantNumeric: 'tabular-nums',
+                color: 'rgba(255,255,255,0.45)',
+                fontFamily: 'monospace',
+                letterSpacing: '0.04em',
               }}
             >
-              {bgColor}
+              {bgColor.toUpperCase()}
             </span>
           </div>
         </div>
       </div>
 
 
-      <div className="sidebar-section" style={{ marginTop: 'auto' }}>
+      {/* ── DRAW TOOLS ── */}
+      <div className="sidebar-section">
+        <div className="section-label">Draw Tools</div>
         <button
           id="draw-tools-btn"
-          className="btn"
+          className="btn btn-primary"
           onClick={() => setShowDrawTools(v => !v)}
           style={{
             display: 'flex',
@@ -589,31 +567,20 @@ export default function LeftSidebar({
             justifyContent: 'center',
             gap: 6,
             background: showDrawTools
-              ? 'linear-gradient(135deg, rgba(225,29,72,0.35) 0%, rgba(239,68,68,0.25) 100%)'
-              : 'linear-gradient(135deg, rgba(225,29,72,0.15) 0%, rgba(239,68,68,0.1) 100%)',
-            border: showDrawTools
-              ? '1px solid rgba(225,29,72,0.75)'
-              : '1px solid rgba(225,29,72,0.35)',
-            color: showDrawTools ? '#fca5a5' : '#f87171',
+              ? 'linear-gradient(135deg, #6d28d9, #7c3aed)'
+              : 'linear-gradient(135deg, #7c3aed, #9333ea)',
+            boxShadow: showDrawTools
+              ? '0 4px 18px rgba(124,58,237,0.55)'
+              : '0 2px 12px rgba(124,58,237,0.32)',
+            border: 'none',
+            color: '#fff',
             fontWeight: 600,
             fontSize: 12,
             padding: '8px 10px',
-            borderRadius: 7,
+            borderRadius: 9,
             cursor: 'pointer',
             transition: 'all 0.2s ease',
             width: '100%',
-          }}
-          onMouseEnter={e => {
-            if (!showDrawTools) {
-              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(225,29,72,0.28) 0%, rgba(239,68,68,0.2) 100%)';
-              e.currentTarget.style.borderColor = 'rgba(225,29,72,0.6)';
-            }
-          }}
-          onMouseLeave={e => {
-            if (!showDrawTools) {
-              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(225,29,72,0.15) 0%, rgba(239,68,68,0.1) 100%)';
-              e.currentTarget.style.borderColor = 'rgba(225,29,72,0.35)';
-            }
           }}
           title="Open drawing tools"
         >
