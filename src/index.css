@@ -51,19 +51,20 @@ body {
 }
 
 /* ─── Section Label ─────────────────────────────────── */
+/* ─── Section Label ──────────────────────────────── */
 .section-label {
   font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
+  font-weight: 500;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.4);
-  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.32);
+  margin-bottom: 8px;
 }
 
-/* ─── Sidebar general ───────────────────────────────── */
+/* ─── Sidebar general ──────────────────────────────── */
 .sidebar-section {
-  padding: 14px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 16px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
 }
 
 /* ─── Right Sidebar ─────────────────────────────────── */
@@ -94,16 +95,16 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 5px;
+  padding: 5px 11px;
   border-radius: 9px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   border: none;
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
-  color: rgba(255, 255, 255, 0.82);
-  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.06);
   white-space: nowrap;
   user-select: none;
 }
@@ -129,17 +130,18 @@ body {
   box-shadow: 0 4px 18px rgba(124, 58, 237, 0.48);
 }
 
+/* Ghost icon button — no background, just the symbol */
 .btn-icon {
   padding: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
   font-size: 13px;
-  background: rgba(255, 255, 255, 0.06);
+  background: transparent;
 }
 
 .btn-icon:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.09);
 }
 
 /* macOS segmented-control style active state */
@@ -162,18 +164,18 @@ body {
   gap: 5px;
 }
 
-/* ─── Pill-style effect buttons ──────────────────────── */
+/* ─── Pill-style effect buttons (compact) ──────────────── */
 .btn-effect {
   border-radius: 999px !important;
-  padding: 5px 11px !important;
-  font-size: 11.5px !important;
+  padding: 4px 10px !important;
+  font-size: 11px !important;
   font-weight: 500 !important;
-  background: rgba(255, 255, 255, 0.05) !important;
-  color: rgba(255, 255, 255, 0.55) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.07) !important;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
   justify-content: flex-start !important;
-  gap: 8px !important;
+  gap: 7px !important;
 }
 
 .btn-effect:hover {
@@ -192,18 +194,18 @@ body {
 
 /* ─── Inputs ─────────────────────────────────────────── */
 .number-input {
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 9px;
   color: #fff;
   text-align: center;
   font-size: 13px;
   font-family: 'Inter', sans-serif;
   width: 52px;
-  height: 32px;
+  height: 30px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
 }
 
 .number-input:focus {
@@ -282,8 +284,8 @@ input[type=range]::-moz-range-track {
 /* ─── Font Dropdown ──────────────────────────────────── */
 .font-select {
   width: 100%;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 9px;
   color: #fff;
   font-size: 13px;
@@ -292,7 +294,7 @@ input[type=range]::-moz-range-track {
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
   appearance: none;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
 }
 
 .font-select:focus {

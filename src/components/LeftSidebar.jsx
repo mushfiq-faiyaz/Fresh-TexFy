@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
+import CollapsibleSection from './CollapsibleSection';
 import { createPortal } from 'react-dom';
 import * as fabric from 'fabric';
 
@@ -188,8 +189,7 @@ export default function LeftSidebar({
       />
 
       {/* ── TEXT & IMAGE ── */}
-      <div className="sidebar-section">
-        <div className="section-label">Elements</div>
+      <CollapsibleSection title="Elements">
         <button className="btn btn-primary" onClick={handleAddText}>
           <span style={{ fontSize: 14, fontWeight: 700 }}>T</span> Add Text
         </button>
@@ -428,11 +428,10 @@ export default function LeftSidebar({
             </div>
           </div>
         )}
-      </div>
+      </CollapsibleSection>
 
       {/* ── FONT ── */}
-      <div className="sidebar-section">
-        <div className="section-label">Font</div>
+      <CollapsibleSection title="Font">
         {/* Native select — each option displays in its own font via inline style.
             This works in Chromium-based browsers.
             The selected item in the box also shows the active font. */}
@@ -452,11 +451,9 @@ export default function LeftSidebar({
             </option>
           ))}
         </select>
+      </CollapsibleSection>
 
-      </div>
-
-      <div className="sidebar-section">
-        <div className="section-label">Style</div>
+      <CollapsibleSection title="Style">
         <div className="btn-group">
           <button
             className={`btn btn-icon ${bold ? 'btn-active' : ''}`}
@@ -483,11 +480,10 @@ export default function LeftSidebar({
             U
           </button>
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ── ALIGNMENT ── */}
-      <div className="sidebar-section">
-        <div className="section-label">Alignment</div>
+      <CollapsibleSection title="Alignment">
         <div className="btn-group">
           <button
             className={`btn btn-icon ${align === 'left' ? 'btn-active' : ''}`}
@@ -514,11 +510,10 @@ export default function LeftSidebar({
             ≡
           </button>
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ── COLOR ── */}
-      <div className="sidebar-section">
-        <div className="section-label">Color</div>
+      <CollapsibleSection title="Color">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div className="color-row">
             <input
@@ -551,12 +546,10 @@ export default function LeftSidebar({
             </span>
           </div>
         </div>
-      </div>
-
+      </CollapsibleSection>
 
       {/* ── DRAW TOOLS ── */}
-      <div className="sidebar-section">
-        <div className="section-label">Draw Tools</div>
+      <CollapsibleSection title="Draw Tools">
         <button
           id="draw-tools-btn"
           className="btn btn-primary"
@@ -586,7 +579,7 @@ export default function LeftSidebar({
         >
           ✏️ Draw Tools
         </button>
-      </div>
+      </CollapsibleSection>
 
       {/* ── Status hint ── */}
       <div style={{ padding: '8px 12px', fontSize: 10, color: 'rgba(255,255,255,0.25)', textAlign: 'center' }}>

@@ -23,6 +23,10 @@ export default function App() {
   const [align, setAlign] = useState('left');
   const [textColor, setTextColor] = useState('#000000');
 
+  // ── Sidebar open/close ────────────────────────────────
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+
   // ── Right sidebar state (with defaults per spec) ──────
   const [fontSize, setFontSize] = useState(32);
   const [letterSpacing, setLetterSpacing] = useState(0);
@@ -246,6 +250,30 @@ export default function App() {
     setActiveLayerId(prev => (prev === layerId ? null : prev));
   }, []);
 
+  // ── Shared toggle-tab style factory ────────────────────
+  const tabStyle = (side) => ({
+    position: 'absolute',
+    [side === 'left' ? 'right' : 'left']: -15,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    width: 15,
+    height: 48,
+    background: 'rgba(18, 18, 28, 0.97)',
+    border: '1px solid rgba(124, 58, 237, 0.28)',
+    borderLeft: side === 'left' ? 'none' : '1px solid rgba(124, 58, 237, 0.28)',
+    borderRight: side === 'right' ? 'none' : '1px solid rgba(124, 58, 237, 0.28)',
+    borderRadius: side === 'left' ? '0 7px 7px 0' : '7px 0 0 7px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 11,
+    zIndex: 20,
+    transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease',
+    userSelect: 'none',
+  });
+
   return (
     <div className="app-root">
       <Toolbar
@@ -256,17 +284,48 @@ export default function App() {
         setRedoStack={setRedoStack}
       />
       <div className="app-body">
-        <LeftSidebar
-          fabricRef={fabricRef}
-          selectedObj={selectedObj}
-          fontFamily={fontFamily} setFontFamily={setFontFamily}
-          bold={bold} setBold={setBold}
-          italic={italic} setItalic={setItalic}
-          underline={underline} setUnderline={setUnderline}
-          align={align} setAlign={setAlign}
-          textColor={textColor} setTextColor={setTextColor}
-          bgColor={bgColor} setBgColor={setBgColor}
-        />
+
+        {/* ── Left sidebar + toggle ── */}
+        <div style={{ position: 'relative', flexShrink: 0, zIndex: 10 }}>
+          <div style={{
+            width: leftOpen ? 180 : 0,
+            overflow: 'hidden',
+            transition: 'width 0.25s ease',
+            height: '100%',
+          }}>
+            <LeftSidebar
+              fabricRef={fabricRef}
+              selectedObj={selectedObj}
+              fontFamily={fontFamily} setFontFamily={setFontFamily}
+              bold={bold} setBold={setBold}
+              italic={italic} setItalic={setItalic}
+              underline={underline} setUnderline={setUnderline}
+              align={align} setAlign={setAlign}
+              textColor={textColor} setTextColor={setTextColor}
+              bgColor={bgColor} setBgColor={setBgColor}
+            />
+          </div>
+          {/* Left toggle tab */}
+          <button
+            onClick={() => setLeftOpen(v => !v)}
+            style={tabStyle('left')}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(124,58,237,0.18)';
+              e.currentTarget.style.color = '#fff';
+              e.currentTarget.style.borderColor = 'rgba(124,58,237,0.55)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(18,18,28,0.97)';
+              e.currentTarget.style.color = 'rgba(255,255,255,0.45)';
+              e.currentTarget.style.borderColor = 'rgba(124,58,237,0.28)';
+            }}
+            title={leftOpen ? 'Collapse panel' : 'Expand panel'}
+          >
+            {leftOpen ? '‹' : '›'}
+          </button>
+        </div>
+
+        {/* ── Canvas ── */}
         <Canvas
           fabricRef={fabricRef}
           selectedObj={selectedObj}
@@ -288,7 +347,6 @@ export default function App() {
           rotation={rotation} setRotation={setRotation}
           undoStack={undoStack} setUndoStack={setUndoStack}
           redoStack={redoStack} setRedoStack={setRedoStack}
-          // Layer callbacks
           layers={layers}
           activeLayerId={activeLayerId}
           onLayerAdd={onLayerAdd}
@@ -301,16 +359,46 @@ export default function App() {
           onDeleteLayer={handleDeleteLayer}
           onReorderLayers={handleReorderLayers}
         />
-        <RightSidebar
-          fabricRef={fabricRef}
-          selectedObj={selectedObj}
-          fontSize={fontSize} setFontSize={setFontSize}
-          letterSpacing={letterSpacing} setLetterSpacing={setLetterSpacing}
-          lineHeight={lineHeight} setLineHeight={setLineHeight}
-          opacity={opacity} setOpacity={setOpacity}
-          effect={effect} setEffect={setEffect}
-          rotation={rotation} setRotation={setRotation}
-        />
+
+        {/* ── Right sidebar + toggle ── */}
+        <div style={{ position: 'relative', flexShrink: 0, zIndex: 10 }}>
+          {/* Right toggle tab */}
+          <button
+            onClick={() => setRightOpen(v => !v)}
+            style={tabStyle('right')}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(124,58,237,0.18)';
+              e.currentTarget.style.color = '#fff';
+              e.currentTarget.style.borderColor = 'rgba(124,58,237,0.55)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(18,18,28,0.97)';
+              e.currentTarget.style.color = 'rgba(255,255,255,0.45)';
+              e.currentTarget.style.borderColor = 'rgba(124,58,237,0.28)';
+            }}
+            title={rightOpen ? 'Collapse panel' : 'Expand panel'}
+          >
+            {rightOpen ? '›' : '‹'}
+          </button>
+          <div style={{
+            width: rightOpen ? 190 : 0,
+            overflow: 'hidden',
+            transition: 'width 0.25s ease',
+            height: '100%',
+          }}>
+            <RightSidebar
+              fabricRef={fabricRef}
+              selectedObj={selectedObj}
+              fontSize={fontSize} setFontSize={setFontSize}
+              letterSpacing={letterSpacing} setLetterSpacing={setLetterSpacing}
+              lineHeight={lineHeight} setLineHeight={setLineHeight}
+              opacity={opacity} setOpacity={setOpacity}
+              effect={effect} setEffect={setEffect}
+              rotation={rotation} setRotation={setRotation}
+            />
+          </div>
+        </div>
+
       </div>
     </div>
   );

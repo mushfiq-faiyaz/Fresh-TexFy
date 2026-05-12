@@ -1,3 +1,5 @@
+import CollapsibleSection from './CollapsibleSection';
+
 const EFFECTS = [
   { key: 'normal',  label: 'Normal',  icon: '◎' },
   { key: 'shadow',  label: 'Shadow',  icon: '▣' },
@@ -59,15 +61,18 @@ export default function RightSidebar({
     <aside
       className="glass right-sidebar"
     >
-      <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ padding: '12px 14px 10px', borderBottom: '1px solid rgba(255,255,255,0.055)' }}>
         <div className="section-label" style={{ marginBottom: 0 }}>Properties</div>
       </div>
 
       {/* ── FONT SIZE ── */}
-      <div className="sidebar-section">
-        <div className="section-label">Font Size</div>
+      <CollapsibleSection title="Font Size">
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <button className="btn btn-icon" style={{ flexShrink: 0 }} onClick={dec}>−</button>
+          <button
+            className="btn btn-icon"
+            style={{ flexShrink: 0, fontSize: 15, color: 'rgba(255,255,255,0.5)' }}
+            onClick={dec}
+          >−</button>
           <input
             type="number"
             className="number-input"
@@ -81,7 +86,11 @@ export default function RightSidebar({
             onWheel={onScrollFontSize}
             style={{ flex: 1, width: 'auto' }}
           />
-          <button className="btn btn-icon" style={{ flexShrink: 0 }} onClick={inc}>+</button>
+          <button
+            className="btn btn-icon"
+            style={{ flexShrink: 0, fontSize: 15, color: 'rgba(255,255,255,0.5)' }}
+            onClick={inc}
+          >+</button>
         </div>
         {/* Prominent font-size slider */}
         <div style={{ marginTop: 10, width: '100%' }}>
@@ -97,12 +106,10 @@ export default function RightSidebar({
             style={sliderStyle(fontSize, 8, 200, '#7c3aed', '#a78bfa')}
           />
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ── SPACING ── */}
-      <div className="sidebar-section">
-        <div className="section-label">Spacing</div>
-
+      <CollapsibleSection title="Spacing">
         <div style={{ marginBottom: 12, width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
             <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>Letter</span>
@@ -120,7 +127,6 @@ export default function RightSidebar({
             style={sliderStyle(letterSpacing, 0, 20, '#7c3aed', '#a78bfa')}
           />
         </div>
-
         <div style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
             <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>Line Height</span>
@@ -138,12 +144,12 @@ export default function RightSidebar({
             style={sliderStyle(lineHeight, 1.0, 3.0, '#7c3aed', '#a78bfa')}
           />
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ── OPACITY ── */}
-      <div className="sidebar-section">
+      <CollapsibleSection title="Opacity">
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <div className="section-label" style={{ marginBottom: 0 }}>Opacity</div>
+          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>Value</span>
           <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.8)' }}>{opacity}%</span>
         </div>
         <input
@@ -157,11 +163,10 @@ export default function RightSidebar({
           className="slider-purple"
           style={sliderStyle(opacity, 0, 100, '#7c3aed', '#a78bfa')}
         />
-      </div>
+      </CollapsibleSection>
 
       {/* ── TEXT EFFECTS ── */}
-      <div className="sidebar-section">
-        <div className="section-label">Text Effects</div>
+      <CollapsibleSection title="Text Effects">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {EFFECTS.map(ef => (
             <button
@@ -174,12 +179,12 @@ export default function RightSidebar({
             </button>
           ))}
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* ── TRANSFORM / ROTATE ── */}
-      <div className="sidebar-section">
+      {/* ── ROTATION ── */}
+      <CollapsibleSection title="Rotation">
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <div className="section-label" style={{ marginBottom: 0 }}>Rotation</div>
+          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>Angle</span>
           <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.8)' }}>{rotation}°</span>
         </div>
         <input
@@ -193,12 +198,11 @@ export default function RightSidebar({
           className="slider-purple"
           style={sliderStyle(rotation, -180, 180, '#7c3aed', '#a78bfa')}
         />
-      </div>
+      </CollapsibleSection>
 
-      {/* ── POSITION (canvas alignment) ── works for single & multi-selection ── */}
+      {/* ── POSITION ── */}
       {selectedObj && (
-        <div className="sidebar-section">
-          <div className="section-label" style={{ marginBottom: 8 }}>Position</div>
+        <CollapsibleSection title="Position">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
 
             {/* Center H */}
@@ -298,7 +302,7 @@ export default function RightSidebar({
             </button>
 
           </div>
-        </div>
+        </CollapsibleSection>
       )}
     </aside>
   );
