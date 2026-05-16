@@ -44,6 +44,9 @@ if (fabric.InteractiveFabricObject) {
   fabric.Object.prototype.padding = 0;
 }
 
+// Ensure default hover cursor for text is 'move' (unless editing)
+fabric.IText.prototype.hoverCursor = 'move';
+
 // ── Custom control render functions ────────────────────────────────────────────
 // Small rounded square for corner handles
 function renderCornerSquare(key, ctx, left, top, _styleOverride, fabricObject) {
@@ -199,7 +202,7 @@ function applyCustomControls(obj) {
       obj.controls[key].render = isCorner ? renderCornerSquare.bind(null, key) : renderEdgeSquare.bind(null, key);
       obj.controls[key].sizeX = isCorner ? 12 : 10;
       obj.controls[key].sizeY = isCorner ? 12 : 10;
-      
+
       // Dynamic rotation-aware cursor
       obj.controls[key].cursorStyleHandler = (eventData, control, fabricObject) => {
         const baseAngle = CONTROL_BASE_ANGLES[key];
@@ -213,12 +216,12 @@ function applyCustomControls(obj) {
 
   if (obj.controls['mtr']) {
     obj.controls['mtr'].render = renderRotateHandle.bind(null, 'mtr');
-    
+
     // Create custom SVG rotate cursor (or use crosshair/alias)
     const rotateSvg = `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><g fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/></g></svg>`;
     const rotateEncoded = encodeURIComponent(rotateSvg).replace(/'/g, '%27').replace(/"/g, '%22');
     obj.controls['mtr'].cursorStyle = `url("data:image/svg+xml,${rotateEncoded}") 12 12, alias`;
-    
+
     delete obj.controls['mtr'].cursorStyleHandler;
     obj.controls['mtr'].sizeX = 18;
     obj.controls['mtr'].sizeY = 18;
@@ -314,34 +317,31 @@ export default function Canvas({
     });
     fabricRef.current = canvas;
 
-    const CURSOR_GRAB = `url('/hand-open.svg') 16 16, grab`;
-    const CURSOR_GRABBING = `url('/hand-closed.svg') 16 16, grabbing`;
-
     // ── Context-sensitive cursors ─────────────────────────────────────────
     // Fabric automatically reads `cursorStyle` from controls and calls
     // canvas.setCursor(). We only need to set the defaults + text special-case.
-    canvas.defaultCursor  = 'default';   // Arrow — empty canvas
-    canvas.hoverCursor    = CURSOR_GRAB; // Open hand — hovering any object
-    canvas.moveCursor     = CURSOR_GRABBING; // Closed hand — while moving
+    canvas.defaultCursor = 'default';   // Arrow — empty canvas
+    canvas.hoverCursor = 'move';      // Sizeall — hovering any object
+    canvas.moveCursor = 'grabbing';  // grabbing — while moving
 
     // Grabbing cursor while dragging
     const upper = canvas.upperCanvasEl;
     canvas.on('mouse:down', (e) => {
       if (e.target && !e.target.isGuide && !canvas.isDrawingMode) {
-        if (upper) upper.style.cursor = CURSOR_GRABBING;
+        if (upper) upper.style.cursor = 'grabbing';
       }
     });
     canvas.on('mouse:up', () => {
       // Let Fabric reset cursor on next mousemove naturally
       if (upper) upper.style.cursor = '';
     });
-    
+
     // Dynamic text hover cursor (I-beam rotation)
     canvas.on('mouse:move', (e) => {
       const obj = e.target;
       if (obj && obj.type === 'i-text') {
         if (!obj.__corner) {
-          obj.hoverCursor = getRotatedIBeamCursor(obj.angle);
+          obj.hoverCursor = obj.isEditing ? getRotatedIBeamCursor(obj.angle) : 'move';
         }
       }
     });
@@ -351,7 +351,7 @@ export default function Canvas({
       const obj = e.target;
       if (obj && obj.type === 'i-text') {
         const rotatedCursor = getRotatedIBeamCursor(obj.angle);
-        
+
         // Fabric hardcodes these to 'text' internally when editing, so we must override them here
         obj.hoverCursor = rotatedCursor;
         canvas.defaultCursor = rotatedCursor;
@@ -361,15 +361,19 @@ export default function Canvas({
           obj.hiddenTextarea.style.transform = `rotate(${obj.angle}deg)`;
           obj.hiddenTextarea.style.transformOrigin = 'center center';
         }
-        
+
         if (upper) upper.style.cursor = rotatedCursor;
       }
     });
 
     // Restore cursors when editing is finished
-    canvas.on('text:editing:exited', () => {
+    canvas.on('text:editing:exited', (e) => {
+      const obj = e.target;
+      if (obj && obj.type === 'i-text') {
+        obj.hoverCursor = 'move';
+      }
       canvas.defaultCursor = 'default';
-      canvas.moveCursor = CURSOR_GRABBING;
+      canvas.moveCursor = 'grabbing';
       if (upper) upper.style.cursor = 'default';
     });
 
@@ -536,7 +540,7 @@ export default function Canvas({
                 setSelectedObj(cloned);
                 // Update clipboard offset so repeated pastes cascade
                 _clipboard.left = (_clipboard.left ?? 50) + 20;
-                _clipboard.top  = (_clipboard.top  ?? 50) + 20;
+                _clipboard.top = (_clipboard.top ?? 50) + 20;
               });
             }
             break;
@@ -615,14 +619,14 @@ export default function Canvas({
       }
 
       // Arrow keys → nudge (1px; 10px with Shift)
-      if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key) && active && !isEditing && !isTyping) {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key) && active && !isEditing && !isTyping) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;
         const delta = {
-          ArrowLeft:  { left: active.left - step },
+          ArrowLeft: { left: active.left - step },
           ArrowRight: { left: active.left + step },
-          ArrowUp:    { top:  active.top  - step },
-          ArrowDown:  { top:  active.top  + step },
+          ArrowUp: { top: active.top - step },
+          ArrowDown: { top: active.top + step },
         }[e.key];
         active.set(delta);
         active.setCoords();
@@ -652,11 +656,11 @@ export default function Canvas({
     rafId = requestAnimationFrame(animateMarchingAnts);
 
     // ── Canva-style Smart Snapping ───────────────────────
-    const SNAP_T     = 7;   // normal snap threshold (px)
-    const CENTER_T   = 12;  // stronger magnetic pull near canvas center
-    const PINK       = '#e040fb'; // Canva alignment pink/magenta
-    const PURPLE     = '#9c27b0'; // canvas-center purple
-    const TICK       = 8;         // equal-spacing bracket tick size
+    const SNAP_T = 7;   // normal snap threshold (px)
+    const CENTER_T = 12;  // stronger magnetic pull near canvas center
+    const PINK = '#e040fb'; // Canva alignment pink/magenta
+    const PURPLE = '#9c27b0'; // canvas-center purple
+    const TICK = 8;         // equal-spacing bracket tick size
 
     function clearGuides() {
       canvas.getObjects().filter(o => o.isGuide).forEach(o => canvas.remove(o));
@@ -738,9 +742,9 @@ export default function Canvas({
       const ch = canvas.getHeight();
 
       obj.setCoords();
-      const bl  = obj.getBoundingRect(true);
-      const oL  = bl.left, oT = bl.top;
-      const oR  = oL + bl.width, oB = oT + bl.height;
+      const bl = obj.getBoundingRect(true);
+      const oL = bl.left, oT = bl.top;
+      const oR = oL + bl.width, oB = oT + bl.height;
       const oCX = oL + bl.width / 2, oCY = oT + bl.height / 2;
 
       // Object's snap-anchor points on each axis
@@ -748,14 +752,14 @@ export default function Canvas({
       const yAnchors = [{ v: oT, off: 0 }, { v: oCY, off: bl.height / 2 }, { v: oB, off: bl.height }];
 
       const leftBase = obj.left - oL;  // transform from bounding-box coords to object.left
-      const topBase  = obj.top  - oT;
+      const topBase = obj.top - oT;
 
       let bestX = null, bestY = null; // { newPos, guidePos, dist, isCanvas, objBounds }
 
       // ── 1. Canvas edges & center ──────────────────────
-      [ { p: 0,      isCenter: false },
-        { p: cw / 2, isCenter: true },
-        { p: cw,     isCenter: false },
+      [{ p: 0, isCenter: false },
+      { p: cw / 2, isCenter: true },
+      { p: cw, isCenter: false },
       ].forEach(({ p, isCenter }) => {
         const thr = isCenter ? CENTER_T : SNAP_T;
         xAnchors.forEach(({ v, off }) => {
@@ -765,9 +769,9 @@ export default function Canvas({
         });
       });
 
-      [ { p: 0,      isCenter: false },
-        { p: ch / 2, isCenter: true },
-        { p: ch,     isCenter: false },
+      [{ p: 0, isCenter: false },
+      { p: ch / 2, isCenter: true },
+      { p: ch, isCenter: false },
       ].forEach(({ p, isCenter }) => {
         const thr = isCenter ? CENTER_T : SNAP_T;
         yAnchors.forEach(({ v, off }) => {
@@ -818,9 +822,9 @@ export default function Canvas({
           drawVFull(bestX.guidePos, bestX.isCenter ? PURPLE : PINK);
         } else {
           const newBl = obj.getBoundingRect(true);
-          const ob    = bestX.ob;
-          const yMin  = Math.min(ob.top, newBl.top);
-          const yMax  = Math.max(ob.top + ob.height, newBl.top + newBl.height);
+          const ob = bestX.ob;
+          const yMin = Math.min(ob.top, newBl.top);
+          const yMax = Math.max(ob.top + ob.height, newBl.top + newBl.height);
           drawVBetween(bestX.guidePos, yMin, yMax, PINK);
         }
       }
@@ -899,20 +903,20 @@ export default function Canvas({
     }
 
     function onObjectModified() { clearGuides(); canvas.requestRenderAll(); }
-    function onMouseUp()        { clearGuides(); canvas.requestRenderAll(); }
+    function onMouseUp() { clearGuides(); canvas.requestRenderAll(); }
 
-    canvas.on('object:moving',   onObjectMoving);
+    canvas.on('object:moving', onObjectMoving);
     canvas.on('object:modified', onObjectModified);
-    canvas.on('mouse:up',        onMouseUp);
+    canvas.on('mouse:up', onMouseUp);
     // ── End Canva-style Smart Snapping ───────────────────
 
 
     return () => {
       cancelAnimationFrame(rafId);
       window.removeEventListener('keydown', onKeyDown);
-      canvas.off('object:moving',   onObjectMoving);
+      canvas.off('object:moving', onObjectMoving);
       canvas.off('object:modified', onObjectModified);
-      canvas.off('mouse:up',        onMouseUp);
+      canvas.off('mouse:up', onMouseUp);
       canvas.dispose();
     };
   }, []);
@@ -1280,11 +1284,11 @@ export default function Canvas({
       });
 
       // ── STEP 3 & 4: Content-aware fill + fabric layer creation ────
-      const originalLeft   = fabricImg.left;
-      const originalTop    = fabricImg.top;
+      const originalLeft = fabricImg.left;
+      const originalTop = fabricImg.top;
       const originalScaleX = fabricImg.scaleX;
       const originalScaleY = fabricImg.scaleY;
-      const originalAngle  = fabricImg.angle;
+      const originalAngle = fabricImg.angle;
       const originalOriginX = fabricImg.originX;
       const originalOriginY = fabricImg.originY;
 
@@ -1314,24 +1318,24 @@ export default function Canvas({
       // Simple color name for layer label
       function rgbToColorName(r, g, b) {
         const palette = [
-          { name: 'red',     r: 255, g: 0,   b: 0   },
-          { name: 'green',   r: 0,   g: 128, b: 0   },
-          { name: 'blue',    r: 0,   g: 0,   b: 255 },
-          { name: 'white',   r: 255, g: 255, b: 255 },
-          { name: 'black',   r: 0,   g: 0,   b: 0   },
-          { name: 'yellow',  r: 255, g: 255, b: 0   },
-          { name: 'orange',  r: 255, g: 165, b: 0   },
-          { name: 'purple',  r: 128, g: 0,   b: 128 },
-          { name: 'pink',    r: 255, g: 192, b: 203 },
-          { name: 'cyan',    r: 0,   g: 255, b: 255 },
-          { name: 'magenta', r: 255, g: 0,   b: 255 },
-          { name: 'gray',    r: 128, g: 128, b: 128 },
-          { name: 'brown',   r: 139, g: 69,  b: 19  },
-          { name: 'lime',    r: 0,   g: 255, b: 0   },
-          { name: 'navy',    r: 0,   g: 0,   b: 128 },
-          { name: 'teal',    r: 0,   g: 128, b: 128 },
-          { name: 'maroon',  r: 128, g: 0,   b: 0   },
-          { name: 'gold',    r: 255, g: 215, b: 0   },
+          { name: 'red', r: 255, g: 0, b: 0 },
+          { name: 'green', r: 0, g: 128, b: 0 },
+          { name: 'blue', r: 0, g: 0, b: 255 },
+          { name: 'white', r: 255, g: 255, b: 255 },
+          { name: 'black', r: 0, g: 0, b: 0 },
+          { name: 'yellow', r: 255, g: 255, b: 0 },
+          { name: 'orange', r: 255, g: 165, b: 0 },
+          { name: 'purple', r: 128, g: 0, b: 128 },
+          { name: 'pink', r: 255, g: 192, b: 203 },
+          { name: 'cyan', r: 0, g: 255, b: 255 },
+          { name: 'magenta', r: 255, g: 0, b: 255 },
+          { name: 'gray', r: 128, g: 128, b: 128 },
+          { name: 'brown', r: 139, g: 69, b: 19 },
+          { name: 'lime', r: 0, g: 255, b: 0 },
+          { name: 'navy', r: 0, g: 0, b: 128 },
+          { name: 'teal', r: 0, g: 128, b: 128 },
+          { name: 'maroon', r: 128, g: 0, b: 0 },
+          { name: 'gold', r: 255, g: 215, b: 0 },
         ];
         const toHex = v => v.toString(16).padStart(2, '0');
         const hex = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
@@ -1363,7 +1367,7 @@ export default function Canvas({
           const di = i * 4;
           if (pixelGroup[i] === groupIdx) {
             // This pixel belongs to this group: copy original
-            layerData[di]     = data[di];
+            layerData[di] = data[di];
             layerData[di + 1] = data[di + 1];
             layerData[di + 2] = data[di + 2];
             layerData[di + 3] = data[di + 3];
@@ -1371,7 +1375,7 @@ export default function Canvas({
             // Original pixel belongs to another group: content-aware fill
             const fill = nearestNeighborColor(i, groupIdx);
             if (fill) {
-              layerData[di]     = fill[0];
+              layerData[di] = fill[0];
               layerData[di + 1] = fill[1];
               layerData[di + 2] = fill[2];
               layerData[di + 3] = 255;
@@ -1393,10 +1397,10 @@ export default function Canvas({
             const fi = new fabric.FabricImage(imgEl);
             fi.set({
               left: originalLeft,
-              top:  originalTop,
+              top: originalTop,
               scaleX: originalScaleX,
               scaleY: originalScaleY,
-              angle:  originalAngle,
+              angle: originalAngle,
               originX: originalOriginX,
               originY: originalOriginY,
             });
@@ -1453,21 +1457,21 @@ export default function Canvas({
       const el = fabricImg._element || (fabricImg.getElement && fabricImg.getElement());
       if (!el) { setIsSeparating(false); return; }
 
-      const srcW = el.naturalWidth  || el.width;
+      const srcW = el.naturalWidth || el.width;
       const srcH = el.naturalHeight || el.height;
 
-      const tmpCanvas  = document.createElement('canvas');
-      tmpCanvas.width  = srcW;
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = srcW;
       tmpCanvas.height = srcH;
       const ctx = tmpCanvas.getContext('2d');
       ctx.drawImage(el, 0, 0, srcW, srcH);
-      const imageData   = ctx.getImageData(0, 0, srcW, srcH);
-      const data        = imageData.data;
+      const imageData = ctx.getImageData(0, 0, srcW, srcH);
+      const data = imageData.data;
       const totalPixels = srcW * srcH;
 
       // ── STEP 2: Group pixels by colour (tolerance ±15) ────────────────────
-      const TOLERANCE   = 15;
-      const MAX_GROUPS  = 8;
+      const TOLERANCE = 15;
+      const MAX_GROUPS = 8;
       const MIN_PERCENT = 0.005; // 0.5 % of total pixels
 
       const colorMap = new Map();
@@ -1475,9 +1479,9 @@ export default function Canvas({
 
       for (let i = 0; i < data.length; i += 4) {
         if (data[i + 3] < 10) continue; // skip transparent pixels
-        const qr  = quantize(data[i]);
-        const qg  = quantize(data[i + 1]);
-        const qb  = quantize(data[i + 2]);
+        const qr = quantize(data[i]);
+        const qg = quantize(data[i + 1]);
+        const qb = quantize(data[i + 2]);
         const key = `${qr},${qg},${qb}`;
         if (!colorMap.has(key)) {
           colorMap.set(key, { r: qr, g: qg, b: qb, pixels: [], count: 0 });
@@ -1498,21 +1502,21 @@ export default function Canvas({
         let minDist = Infinity, mergeA = 0, mergeB = 1;
         for (let a = 0; a < groups.length; a++) {
           for (let b = a + 1; b < groups.length; b++) {
-            const dr   = groups[a].r - groups[b].r;
-            const dg   = groups[a].g - groups[b].g;
-            const db   = groups[a].b - groups[b].b;
+            const dr = groups[a].r - groups[b].r;
+            const dg = groups[a].g - groups[b].g;
+            const db = groups[a].b - groups[b].b;
             const dist = dr * dr + dg * dg + db * db;
             if (dist < minDist) { minDist = dist; mergeA = a; mergeB = b; }
           }
         }
-        const ga    = groups[mergeA];
-        const gb    = groups[mergeB];
+        const ga = groups[mergeA];
+        const gb = groups[mergeB];
         const total = ga.count + gb.count;
-        ga.r      = Math.round((ga.r * ga.count + gb.r * gb.count) / total);
-        ga.g      = Math.round((ga.g * ga.count + gb.g * gb.count) / total);
-        ga.b      = Math.round((ga.b * ga.count + gb.b * gb.count) / total);
+        ga.r = Math.round((ga.r * ga.count + gb.r * gb.count) / total);
+        ga.g = Math.round((ga.g * ga.count + gb.g * gb.count) / total);
+        ga.b = Math.round((ga.b * ga.count + gb.b * gb.count) / total);
         ga.pixels = ga.pixels.concat(gb.pixels);
-        ga.count  = total;
+        ga.count = total;
         groups.splice(mergeB, 1);
       }
 
@@ -1526,15 +1530,15 @@ export default function Canvas({
       });
 
       // ── STEP 3: Capture original fabric transform ─────────────────────────
-      const origLeft    = fabricImg.left;
-      const origTop     = fabricImg.top;
-      const origScaleX  = fabricImg.scaleX;
-      const origScaleY  = fabricImg.scaleY;
-      const origAngle   = fabricImg.angle;
+      const origLeft = fabricImg.left;
+      const origTop = fabricImg.top;
+      const origScaleX = fabricImg.scaleX;
+      const origScaleY = fabricImg.scaleY;
+      const origAngle = fabricImg.angle;
       const origOriginX = fabricImg.originX;
       const origOriginY = fabricImg.originY;
 
-      const toHex  = v => v.toString(16).padStart(2, '0');
+      const toHex = v => v.toString(16).padStart(2, '0');
       const rgbHex = (r, g, b) => `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 
       // Rename original layer panel entry → "Original"
@@ -1549,36 +1553,36 @@ export default function Canvas({
       for (const group of groupsLargestFirst) {
         const gi = groups.indexOf(group);
 
-        const layerCanvas    = document.createElement('canvas');
-        layerCanvas.width    = srcW;
-        layerCanvas.height   = srcH;
-        const lCtx           = layerCanvas.getContext('2d');
+        const layerCanvas = document.createElement('canvas');
+        layerCanvas.width = srcW;
+        layerCanvas.height = srcH;
+        const lCtx = layerCanvas.getContext('2d');
         const layerImageData = lCtx.createImageData(srcW, srcH);
-        const ld             = layerImageData.data;
+        const ld = layerImageData.data;
         // ImageData is zero-initialised (alpha=0 by default)
         for (let i = 0; i < totalPixels; i++) {
           if (pixelGroup[i] !== gi) continue; // keep transparent
-          const di       = i * 4;
-          ld[di]         = data[di];
-          ld[di + 1]     = data[di + 1];
-          ld[di + 2]     = data[di + 2];
-          ld[di + 3]     = data[di + 3];
+          const di = i * 4;
+          ld[di] = data[di];
+          ld[di + 1] = data[di + 1];
+          ld[di + 2] = data[di + 2];
+          ld[di + 3] = data[di + 3];
         }
         lCtx.putImageData(layerImageData, 0, 0);
 
         const dataURL = layerCanvas.toDataURL('image/png');
-        const hex     = rgbHex(group.r, group.g, group.b);
+        const hex = rgbHex(group.r, group.g, group.b);
 
         await new Promise(resolve => {
-          const imgEl  = new Image();
+          const imgEl = new Image();
           imgEl.onload = () => {
             const fi = new fabric.FabricImage(imgEl);
             fi.set({
-              left:    origLeft,
-              top:     origTop,
-              scaleX:  origScaleX,
-              scaleY:  origScaleY,
-              angle:   origAngle,
+              left: origLeft,
+              top: origTop,
+              scaleX: origScaleX,
+              scaleY: origScaleY,
+              angle: origAngle,
               originX: origOriginX,
               originY: origOriginY,
             });
@@ -1638,24 +1642,24 @@ export default function Canvas({
 
     try {
       // ── STEP 1: Read pixels at natural dimensions ────────────────────────────
-      const srcW = el.naturalWidth  || el.width;
+      const srcW = el.naturalWidth || el.width;
       const srcH = el.naturalHeight || el.height;
       const totalPixels = srcW * srcH;
 
-      const tmpCanvas  = document.createElement('canvas');
-      tmpCanvas.width  = srcW;
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = srcW;
       tmpCanvas.height = srcH;
       const ctx = tmpCanvas.getContext('2d');
       ctx.drawImage(el, 0, 0, srcW, srcH);
       const imageData = ctx.getImageData(0, 0, srcW, srcH);
-      const data      = imageData.data;
+      const data = imageData.data;
 
       // ── STEP 2: BFS connected-component labeling on alpha channel ────────────
       // -1 = unlabeled, ≥0 = region id
-      const labels      = new Int32Array(totalPixels).fill(-1);
-      const isActive    = px => data[px * 4 + 3] > 10;
+      const labels = new Int32Array(totalPixels).fill(-1);
+      const isActive = px => data[px * 4 + 3] > 10;
       const regionSizes = []; // region id → size
-      let regionCount   = 0;
+      let regionCount = 0;
 
       // 4-connectivity neighbour offsets
       const DX = [0, 0, -1, 1];
@@ -1670,7 +1674,7 @@ export default function Canvas({
 
         // Iterative BFS with head pointer — avoids call-stack overflow
         const queue = [startPx];
-        let head    = 0;
+        let head = 0;
         while (head < queue.length) {
           const px = queue[head++];
           regionSizes[labelId]++;
@@ -1692,10 +1696,10 @@ export default function Canvas({
       // ── STEP 3: Filter small regions, collect pixel lists ────────────────────
       const MIN_PERCENT = 0.005;
       const MAX_REGIONS = 8;
-      const minCount    = totalPixels * MIN_PERCENT;
+      const minCount = totalPixels * MIN_PERCENT;
 
       // Build region metadata from surviving label ids
-      const keepIds  = new Set();
+      const keepIds = new Set();
       for (let id = 0; id < regionCount; id++) {
         if (regionSizes[id] >= minCount) keepIds.add(id);
       }
@@ -1704,7 +1708,7 @@ export default function Canvas({
       // Allocate region objects
       // Map: labelId → region array index (for fast lookup during pixel scan)
       const idToIdx = new Map();
-      let regions   = [];
+      let regions = [];
       keepIds.forEach(id => {
         idToIdx.set(id, regions.length);
         regions.push({ count: regionSizes[id], pixels: [] });
@@ -1735,11 +1739,11 @@ export default function Canvas({
       });
 
       // ── STEP 4: Capture original fabric transform ────────────────────────────
-      const origLeft    = fabricImg.left;
-      const origTop     = fabricImg.top;
-      const origScaleX  = fabricImg.scaleX;
-      const origScaleY  = fabricImg.scaleY;
-      const origAngle   = fabricImg.angle;
+      const origLeft = fabricImg.left;
+      const origTop = fabricImg.top;
+      const origScaleX = fabricImg.scaleX;
+      const origScaleY = fabricImg.scaleY;
+      const origAngle = fabricImg.angle;
       const origOriginX = fabricImg.originX;
       const origOriginY = fabricImg.originY;
 
@@ -1755,17 +1759,17 @@ export default function Canvas({
       for (const region of regionsLargestFirst) {
         const ri = regions.indexOf(region);
 
-        const layerCanvas    = document.createElement('canvas');
-        layerCanvas.width    = srcW;
-        layerCanvas.height   = srcH;
-        const lCtx           = layerCanvas.getContext('2d');
+        const layerCanvas = document.createElement('canvas');
+        layerCanvas.width = srcW;
+        layerCanvas.height = srcH;
+        const lCtx = layerCanvas.getContext('2d');
         const layerImageData = lCtx.createImageData(srcW, srcH);
-        const ld             = layerImageData.data; // zero-initialised → alpha=0 by default
+        const ld = layerImageData.data; // zero-initialised → alpha=0 by default
 
         for (let i = 0; i < totalPixels; i++) {
           if (pixelRegion[i] !== ri) continue;
-          const di   = i * 4;
-          ld[di]     = data[di];
+          const di = i * 4;
+          ld[di] = data[di];
           ld[di + 1] = data[di + 1];
           ld[di + 2] = data[di + 2];
           ld[di + 3] = data[di + 3];
@@ -1774,15 +1778,15 @@ export default function Canvas({
         const dataURL = layerCanvas.toDataURL('image/png');
 
         await new Promise(resolve => {
-          const imgEl  = new Image();
+          const imgEl = new Image();
           imgEl.onload = () => {
             const fi = new fabric.FabricImage(imgEl);
             fi.set({
-              left:    origLeft,
-              top:     origTop,
-              scaleX:  origScaleX,
-              scaleY:  origScaleY,
-              angle:   origAngle,
+              left: origLeft,
+              top: origTop,
+              scaleX: origScaleX,
+              scaleY: origScaleY,
+              angle: origAngle,
               originX: origOriginX,
               originY: origOriginY,
             });
@@ -1835,21 +1839,21 @@ export default function Canvas({
       const el = fabricImg._element || (fabricImg.getElement && fabricImg.getElement());
       if (!el) { setIsSeparating(false); return; }
 
-      const srcW        = el.naturalWidth  || el.width;
-      const srcH        = el.naturalHeight || el.height;
+      const srcW = el.naturalWidth || el.width;
+      const srcH = el.naturalHeight || el.height;
       const totalPixels = srcW * srcH;
 
-      const tmpCanvas  = document.createElement('canvas');
-      tmpCanvas.width  = srcW;
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = srcW;
       tmpCanvas.height = srcH;
-      const ctx        = tmpCanvas.getContext('2d');
+      const ctx = tmpCanvas.getContext('2d');
       ctx.drawImage(el, 0, 0, srcW, srcH);
-      const imageData  = ctx.getImageData(0, 0, srcW, srcH);
-      const data       = imageData.data;
+      const imageData = ctx.getImageData(0, 0, srcW, srcH);
+      const data = imageData.data;
 
       // ── STEP 2: Assign each active pixel a colour-group key ─────────────────
       const TOLERANCE = 15;
-      const quantize  = v => Math.round(v / TOLERANCE) * TOLERANCE;
+      const quantize = v => Math.round(v / TOLERANCE) * TOLERANCE;
 
       // colorKey[px] = quantised colour string, or '' for transparent
       const colorKey = new Array(totalPixels).fill('');
@@ -1858,11 +1862,11 @@ export default function Canvas({
 
       for (let i = 0; i < data.length; i += 4) {
         if (data[i + 3] < 10) continue;
-        const qr  = quantize(data[i]);
-        const qg  = quantize(data[i + 1]);
-        const qb  = quantize(data[i + 2]);
+        const qr = quantize(data[i]);
+        const qg = quantize(data[i + 1]);
+        const qb = quantize(data[i + 2]);
         const key = `${qr},${qg},${qb}`;
-        const px  = i >> 2;
+        const px = i >> 2;
         colorKey[px] = key;
         if (!colorGroups.has(key)) colorGroups.set(key, { r: qr, g: qg, b: qb, pixels: [] });
         colorGroups.get(key).pixels.push(px);
@@ -1889,8 +1893,8 @@ export default function Canvas({
 
           // New connected blob within this colour group
           const partPixels = [];
-          const queue      = [startPx];
-          let   head       = 0;
+          const queue = [startPx];
+          let head = 0;
           visited[startPx] = 1;
 
           while (head < queue.length) {
@@ -1916,8 +1920,8 @@ export default function Canvas({
 
       // ── STEP 4: Filter, cap, and sort layers ─────────────────────────────────
       const MIN_PERCENT = 0.005;
-      const MAX_LAYERS  = 10;
-      const minCount    = totalPixels * MIN_PERCENT;
+      const MAX_LAYERS = 10;
+      const minCount = totalPixels * MIN_PERCENT;
 
       let parts = rawParts.filter(p => p.count >= minCount);
       const rawPartCount = parts.length;
@@ -1929,9 +1933,9 @@ export default function Canvas({
         parts[1].count += parts[0].count;
         // Average the colour for the merged part
         const total = parts[1].count;
-        parts[1].r  = Math.round((parts[1].r * parts[1].count + parts[0].r * parts[0].count) / total);
-        parts[1].g  = Math.round((parts[1].g * parts[1].count + parts[0].g * parts[0].count) / total);
-        parts[1].b  = Math.round((parts[1].b * parts[1].count + parts[0].b * parts[0].count) / total);
+        parts[1].r = Math.round((parts[1].r * parts[1].count + parts[0].r * parts[0].count) / total);
+        parts[1].g = Math.round((parts[1].g * parts[1].count + parts[0].g * parts[0].count) / total);
+        parts[1].b = Math.round((parts[1].b * parts[1].count + parts[0].b * parts[0].count) / total);
         parts.splice(0, 1);
       }
       parts.sort((a, b) => a.count - b.count);
@@ -1941,15 +1945,15 @@ export default function Canvas({
       parts.forEach((p, pi) => p.pixels.forEach(px => { pixelPart[px] = pi; }));
 
       // ── STEP 5: Capture original fabric transform ────────────────────────────
-      const origLeft    = fabricImg.left;
-      const origTop     = fabricImg.top;
-      const origScaleX  = fabricImg.scaleX;
-      const origScaleY  = fabricImg.scaleY;
-      const origAngle   = fabricImg.angle;
+      const origLeft = fabricImg.left;
+      const origTop = fabricImg.top;
+      const origScaleX = fabricImg.scaleX;
+      const origScaleY = fabricImg.scaleY;
+      const origAngle = fabricImg.angle;
       const origOriginX = fabricImg.originX;
       const origOriginY = fabricImg.originY;
 
-      const toHex  = v => v.toString(16).padStart(2, '0');
+      const toHex = v => v.toString(16).padStart(2, '0');
       const rgbHex = (r, g, b) => `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 
       // Rename original panel entry → "Original"
@@ -1963,17 +1967,17 @@ export default function Canvas({
       for (const part of partsLargestFirst) {
         const pi = parts.indexOf(part);
 
-        const layerCanvas    = document.createElement('canvas');
-        layerCanvas.width    = srcW;
-        layerCanvas.height   = srcH;
-        const lCtx           = layerCanvas.getContext('2d');
+        const layerCanvas = document.createElement('canvas');
+        layerCanvas.width = srcW;
+        layerCanvas.height = srcH;
+        const lCtx = layerCanvas.getContext('2d');
         const layerImageData = lCtx.createImageData(srcW, srcH);
-        const ld             = layerImageData.data; // zero-init → alpha=0
+        const ld = layerImageData.data; // zero-init → alpha=0
 
         for (let i = 0; i < totalPixels; i++) {
           if (pixelPart[i] !== pi) continue;
-          const di   = i * 4;
-          ld[di]     = data[di];
+          const di = i * 4;
+          ld[di] = data[di];
           ld[di + 1] = data[di + 1];
           ld[di + 2] = data[di + 2];
           ld[di + 3] = data[di + 3];
@@ -1981,18 +1985,18 @@ export default function Canvas({
         lCtx.putImageData(layerImageData, 0, 0);
 
         const dataURL = layerCanvas.toDataURL('image/png');
-        const hex     = rgbHex(part.r, part.g, part.b);
+        const hex = rgbHex(part.r, part.g, part.b);
 
         await new Promise(resolve => {
-          const imgEl  = new Image();
+          const imgEl = new Image();
           imgEl.onload = () => {
             const fi = new fabric.FabricImage(imgEl);
             fi.set({
-              left:    origLeft,
-              top:     origTop,
-              scaleX:  origScaleX,
-              scaleY:  origScaleY,
-              angle:   origAngle,
+              left: origLeft,
+              top: origTop,
+              scaleX: origScaleX,
+              scaleY: origScaleY,
+              angle: origAngle,
               originX: origOriginX,
               originY: origOriginY,
             });
@@ -2090,7 +2094,7 @@ export default function Canvas({
     if (!canvas) return;
     const obj = canvas.getActiveObject();
     if (!obj) { setDeletePos(null); return; }
-    
+
     const z = zoom / 100;
 
     // Position delete button exactly 20px above the rotation handle
@@ -2100,10 +2104,10 @@ export default function Canvas({
       const dx = mtr.x - mt.x;
       const dy = mtr.y - mt.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      
+
       if (dist > 0) {
         // Push 28px further out from the rotation handle
-        const push = 28 / dist; 
+        const push = 28 / dist;
         setDeletePos({
           x: (mtr.x + dx * push) * z,
           y: (mtr.y + dy * push) * z,
@@ -2111,7 +2115,7 @@ export default function Canvas({
         return;
       }
     }
-    
+
     // Fallback if no rotation handle exists
     const bound = obj.getBoundingRect();
     setDeletePos({
