@@ -101,43 +101,48 @@ function renderRotateHandle(ctx, left, top, _styleOverride, fabricObject) {
   ctx.restore();
 }
 
+// ── Custom SVG Cursors for Canvas Resizing ───────────────────────────────────
+const CURSOR_NWSE = `url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2724%27%20height%3D%2724%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cg%20transform%3D%27rotate%28-45%2C12%2C12%29%27%20fill%3D%27black%27%20stroke%3D%27white%27%20stroke-width%3D%271.5%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%2C4L17%2C8L13.5%2C8L13.5%2C16L17%2C16L12%2C20L7%2C16L10.5%2C16L10.5%2C8L7%2C8Z%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") 12 12, nwse-resize`;
+
+const CURSOR_NESW = `url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2724%27%20height%3D%2724%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cg%20transform%3D%27rotate%2845%2C12%2C12%29%27%20fill%3D%27black%27%20stroke%3D%27white%27%20stroke-width%3D%271.5%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%2C4L17%2C8L13.5%2C8L13.5%2C16L17%2C16L12%2C20L7%2C16L10.5%2C16L10.5%2C8L7%2C8Z%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") 12 12, nesw-resize`;
+
+const CURSOR_NS = `url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2724%27%20height%3D%2724%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cg%20fill%3D%27black%27%20stroke%3D%27white%27%20stroke-width%3D%271.5%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%2C4L17%2C8L13.5%2C8L13.5%2C16L17%2C16L12%2C20L7%2C16L10.5%2C16L10.5%2C8L7%2C8Z%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") 12 12, ns-resize`;
+
+const CURSOR_EW = `url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2724%27%20height%3D%2724%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cg%20transform%3D%27rotate%2890%2C12%2C12%29%27%20fill%3D%27black%27%20stroke%3D%27white%27%20stroke-width%3D%271.5%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%2C4L17%2C8L13.5%2C8L13.5%2C16L17%2C16L12%2C20L7%2C16L10.5%2C16L10.5%2C8L7%2C8Z%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") 12 12, ew-resize`;
+
 // ── Apply custom controls to all fabric objects ────────────────────────────────
 function applyCustomControls(obj) {
   if (!obj || !obj.controls) return;
 
-  // Per-corner resize cursors (native OS shapes)
-  const corners = ['tl', 'tr', 'bl', 'br'];
-  const cornerCursors = {
-    tl: 'nwse-resize', tr: 'nesw-resize',
-    bl: 'nesw-resize', br: 'nwse-resize',
-  };
-  const edges = ['mt', 'mb', 'ml', 'mr'];
-  const edgeCursors = {
-    mt: 'ns-resize', mb: 'ns-resize',
-    ml: 'ew-resize', mr: 'ew-resize',
+  const CONTROL_BASE_ANGLES = { mt: 0, tr: 45, mr: 90, br: 135, mb: 180, bl: 225, ml: 270, tl: 315 };
+  const CURSOR_MAP = {
+    0: CURSOR_NS, 1: CURSOR_NESW, 2: CURSOR_EW, 3: CURSOR_NWSE,
+    4: CURSOR_NS, 5: CURSOR_NESW, 6: CURSOR_EW, 7: CURSOR_NWSE
   };
 
-  corners.forEach(key => {
+  ['tl', 'tr', 'bl', 'br', 'mt', 'mb', 'ml', 'mr'].forEach(key => {
     if (obj.controls[key]) {
-      obj.controls[key].render = renderFilledCircle;
-      obj.controls[key].cursorStyle = cornerCursors[key];
-      obj.controls[key].sizeX = CORNER_SIZE;
-      obj.controls[key].sizeY = CORNER_SIZE;
-    }
-  });
-
-  edges.forEach(key => {
-    if (obj.controls[key]) {
-      obj.controls[key].render = renderHollowCircle;
-      obj.controls[key].cursorStyle = edgeCursors[key];
-      obj.controls[key].sizeX = 10;
-      obj.controls[key].sizeY = 10;
+      // Corners get filled circles and CORNER_SIZE, edges get hollow circles and 10px size
+      const isCorner = ['tl', 'tr', 'bl', 'br'].includes(key);
+      obj.controls[key].render = isCorner ? renderFilledCircle : renderHollowCircle;
+      obj.controls[key].sizeX = isCorner ? CORNER_SIZE : 10;
+      obj.controls[key].sizeY = isCorner ? CORNER_SIZE : 10;
+      
+      // Dynamic rotation-aware cursor
+      obj.controls[key].cursorStyleHandler = (eventData, control, fabricObject) => {
+        const baseAngle = CONTROL_BASE_ANGLES[key];
+        const objAngle = fabricObject.angle || 0;
+        const totalAngle = baseAngle + objAngle;
+        const step = ((Math.round(totalAngle / 45) % 8) + 8) % 8;
+        return CURSOR_MAP[step];
+      };
     }
   });
 
   if (obj.controls['mtr']) {
     obj.controls['mtr'].render = renderRotateHandle;
     obj.controls['mtr'].cursorStyle = 'crosshair';  // Crosshair for rotate
+    delete obj.controls['mtr'].cursorStyleHandler; // Force custom cursor
     obj.controls['mtr'].sizeX = 12;
     obj.controls['mtr'].sizeY = 12;
   }
@@ -237,15 +242,6 @@ export default function Canvas({
     canvas.defaultCursor  = 'default';   // Arrow — empty canvas
     canvas.hoverCursor    = 'move';      // Sizeall — hovering any object
     canvas.moveCursor     = 'grabbing';  // grabbing — while moving
-
-    // Per-object type: text gets I-beam, everything else gets move
-    canvas.on('mouse:over', (e) => {
-      if (!e.target || e.target.isGuide || e.target.__isBlankLayer) return;
-      e.target.hoverCursor =
-        (e.target.type === 'i-text' || e.target.type === 'textbox')
-          ? 'text'    // Ibeam
-          : 'move';   // Sizeall
-    });
 
     // Grabbing cursor while dragging
     const upper = canvas.upperCanvasEl;
