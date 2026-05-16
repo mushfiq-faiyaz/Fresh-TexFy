@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { RefreshCw, Pencil, Download, Trash2 } from 'lucide-react';
 
 /* ─── Eye icon ──────────────────────────────────────────────────────────── */
 function EyeIcon({ hidden }) {
@@ -298,17 +299,18 @@ function LayerContextMenu({ x, y, onClose, onRename, onRefresh, onExport, onDele
         top: safeY,
         left: safeX,
         zIndex: 999999,
-        background: '#1e1e2e',
-        border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: 8,
-        padding: 6,
-        minWidth: 160,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        background: 'rgba(30, 30, 40, 0.75)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 12,
+        padding: '4px 0',
+        minWidth: 200,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2)',
         fontFamily: 'Inter, sans-serif',
         display: 'flex',
         flexDirection: 'column',
-        gap: 2,
-        animation: 'menuFadeIn 0.1s cubic-bezier(0.16, 1, 0.3, 1)',
+        animation: 'menuFadeIn 120ms ease-out',
       }}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
       onMouseDown={(e) => e.stopPropagation()}
@@ -316,43 +318,53 @@ function LayerContextMenu({ x, y, onClose, onRename, onRefresh, onExport, onDele
     >
       <style>{`
         @keyframes menuFadeIn {
-          from { opacity: 0; transform: scale(0.96) translateY(-4px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
         }
         .mac-context-item {
-          padding: 6px 10px;
-          border-radius: 4px;
-          cursor: pointer;
+          height: 32px;
+          margin: 0 4px;
+          padding: 0 12px;
+          border-radius: 8px;
+          cursor: default;
           color: #ffffff;
-          font-size: 12px;
-          font-weight: 500;
+          font-size: 13px;
+          font-weight: 400;
+          letter-spacing: 0.01em;
           display: flex;
           align-items: center;
-          transition: background 0.1s, color 0.1s;
         }
-        .mac-context-item span {
+        .mac-context-item span.icon {
           margin-right: 8px;
-          font-size: 14px;
+          font-size: 16px;
+          opacity: 0.85;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 16px;
         }
         .mac-context-item:hover {
-          background: #8b5cf6; /* Purple hover */
+          background: rgba(255,255,255,0.08);
+        }
+        .mac-context-item.danger {
+          color: #ff5f57;
         }
         .mac-context-item.danger:hover {
-          background: #ef4444; /* Red hover for delete */
+          background: rgba(255, 95, 87, 0.15); /* subtle red background for hover */
         }
       `}</style>
       <div className="mac-context-item" onClick={() => { onRefresh(); onClose(); }}>
-        <span>🔄</span> Refresh Thumbnail
+        <span className="icon"><RefreshCw size={15} className="opacity-70" /></span> Refresh Thumbnail
       </div>
       <div className="mac-context-item" onClick={() => { onRename(); onClose(); }}>
-        <span>✏️</span> Rename
+        <span className="icon"><Pencil size={15} className="opacity-70" /></span> Rename
       </div>
       <div className="mac-context-item" onClick={() => { onExport(); onClose(); }}>
-        <span>📤</span> Export Layer
+        <span className="icon"><Download size={15} className="opacity-70" /></span> Export Layer
       </div>
-      <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '4px' }} />
-      <div className="mac-context-item danger" style={{ color: '#ef4444' }} onClick={() => { onDelete(); onClose(); }}>
-        <span>🗑️</span> Delete
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', margin: '4px 0' }} />
+      <div className="mac-context-item danger" onClick={() => { onDelete(); onClose(); }}>
+        <span className="icon"><Trash2 size={15} className="opacity-70" color="#ff5f57" /></span> Delete
       </div>
     </div>,
     document.body

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import * as fabric from 'fabric';
 import { jsPDF } from 'jspdf';
 import FreshTexfyLogo from './FreshTexfyLogo';
+import { Image, ImageIcon, FileImage, Globe, Code2, FileText } from 'lucide-react';
 
 /* ── Keyboard shortcuts reference ─────────────────────────────────────── */
 const SHORTCUTS = [
@@ -18,119 +19,123 @@ const SHORTCUTS = [
     { keys: ['Del'],               label: 'Delete selected' },
     { keys: ['Esc'],               label: 'Deselect' },
   ]},
-  { group: 'Move',       items: [
-    { keys: ['↑ ↓ ← →'],          label: 'Nudge 1 px' },
-    { keys: ['Shift', '↑↓←→'],    label: 'Nudge 10 px' },
+  { group: 'Arrange',    items: [
+    { keys: ['Ctrl', '↑'],         label: 'Bring forward' },
+    { keys: ['Ctrl', '↓'],         label: 'Send backward' },
+    { keys: ['Ctrl', 'Shift', '↑'],label: 'Bring to front' },
+    { keys: ['Ctrl', 'Shift', '↓'],label: 'Send to back' },
   ]},
-  { group: 'Layer Order', items: [
-    { keys: ['Ctrl', ']'],         label: 'Bring Forward' },
-    { keys: ['Ctrl', '['],         label: 'Send Backward' },
+  { group: 'Tools',      items: [
+    { keys: ['Space (hold)'],      label: 'Pan canvas' },
+    { keys: ['Shift', 'Click'],    label: 'Multi-select' },
+    { keys: ['Mouse Wheel'],       label: 'Pan vertical' },
+    { keys: ['Shift', 'Wheel'],    label: 'Pan horizontal' },
+    { keys: ['Ctrl', 'Wheel'],     label: 'Zoom in/out' },
   ]},
 ];
 
 function ShortcutsModal({ onClose }) {
   // Close on Escape
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    const handleEsc = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
   }, [onClose]);
 
   return (
     <div
+      className="modal-backdrop"
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 99999,
-        background: 'rgba(0,0,0,0.55)',
-        backdropFilter: 'blur(6px)',
+        position: 'fixed', inset: 0, zIndex: 999999,
+        background: 'rgba(0,0,0,0.6)',
+        backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20
       }}
     >
       <div
+        className="glass modal-content"
         onClick={e => e.stopPropagation()}
         style={{
-          background: 'rgba(12,12,22,0.97)',
+          width: '100%', maxWidth: 640,
+          background: 'linear-gradient(145deg, rgba(35,35,50,0.95), rgba(25,25,35,0.95))',
+          borderRadius: 16,
           border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 18,
-          padding: '28px 32px',
-          width: 420,
-          maxHeight: '80vh',
-          overflowY: 'auto',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.8)',
-          animation: 'shortcutsIn 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)',
+          overflow: 'hidden',
+          display: 'flex', flexDirection: 'column'
         }}
       >
-        <style>{`
-          @keyframes shortcutsIn {
-            from { opacity: 0; transform: scale(0.92) translateY(10px); }
-            to   { opacity: 1; transform: scale(1) translateY(0); }
-          }
-        `}</style>
-
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
-          <div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
-              ⌨️ Keyboard Shortcuts
-            </div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>
-              Speed up your workflow
-            </div>
-          </div>
+        <div style={{
+          padding: '20px 24px',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+        }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 20, opacity: 0.8 }}>⌨️</span> Keyboard Shortcuts
+          </h2>
           <button
+            className="btn btn-icon"
             onClick={onClose}
-            style={{
-              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 8, color: 'rgba(255,255,255,0.6)', cursor: 'pointer',
-              fontSize: 13, fontWeight: 600, padding: '4px 10px',
-            }}
-          >
-            ✕
-          </button>
+            style={{ width: 32, height: 32, fontSize: 18 }}
+          >×</button>
         </div>
 
-        {/* Groups */}
-        {SHORTCUTS.map(group => (
-          <div key={group.group} style={{ marginBottom: 20 }}>
-            <div style={{
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
-              color: 'rgba(167,139,250,0.8)', textTransform: 'uppercase', marginBottom: 8,
-            }}>
-              {group.group}
-            </div>
-            {group.items.map((item, i) => (
-              <div key={i} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '6px 0',
-                borderBottom: i < group.items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+        {/* Content */}
+        <div style={{
+          padding: 24,
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+          gap: 24,
+          maxHeight: '70vh',
+          overflowY: 'auto',
+        }}>
+          {SHORTCUTS.map(group => (
+            <div key={group.group}>
+              <h3 style={{
+                margin: '0 0 12px 0',
+                fontSize: 12,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                color: '#8b5cf6'
               }}>
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{item.label}</span>
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                  {item.keys.map((k, ki) => (
-                    <span key={ki}>
-                      <span style={{
-                        background: 'rgba(99,102,241,0.18)',
-                        border: '1px solid rgba(99,102,241,0.4)',
-                        borderRadius: 5,
-                        padding: '2px 7px',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: '#a5b4fc',
-                        fontFamily: 'monospace',
-                        letterSpacing: '0.02em',
-                      }}>
-                        {k}
-                      </span>
-                      {ki < item.keys.length - 1 && (
-                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', margin: '0 2px' }}>+</span>
-                      )}
+                {group.group}
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {group.items.map(item => (
+                  <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>{item.label}</span>
+                    <span style={{ display: 'flex', gap: 4 }}>
+                      {item.keys.map((k, ki) => (
+                        <span key={ki} style={{ display: 'flex', alignItems: 'center' }}>
+                          <span style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            borderRadius: 4,
+                            padding: '2px 6px',
+                            fontSize: 11,
+                            color: '#fff',
+                            fontFamily: 'monospace',
+                            boxShadow: '0 2px 0 rgba(0,0,0,0.2)',
+                            letterSpacing: '0.02em',
+                          }}>
+                            {k}
+                          </span>
+                          {ki < item.keys.length - 1 && (
+                            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', margin: '0 2px' }}>+</span>
+                          )}
+                        </span>
+                      ))}
                     </span>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        ))}
+            </div>
+          ))}
+        </div>
 
         {/* Footer hint */}
         <div style={{ marginTop: 8, textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>
@@ -142,12 +147,12 @@ function ShortcutsModal({ onClose }) {
 }
 
 const EXPORT_FORMATS = [
-  { key: 'png',  label: '🖼 Export as PNG',  icon: '🖼' },
-  { key: 'jpg',  label: '📷 Export as JPG',  icon: '📷' },
-  { key: 'jpeg', label: '📷 Export as JPEG', icon: '📷' },
-  { key: 'webp', label: '🌐 Export as WEBP', icon: '🌐' },
-  { key: 'svg',  label: '✏️ Export as SVG',  icon: '✏️' },
-  { key: 'pdf',  label: '📄 Export as PDF',  icon: '📄' },
+  { key: 'png',  label: 'Export as PNG',  icon: <Image size={15} className="opacity-70" />,      badge: 'PNG' },
+  { key: 'jpg',  label: 'Export as JPG',  icon: <ImageIcon size={15} className="opacity-70" />,  badge: 'JPG' },
+  { key: 'jpeg', label: 'Export as JPEG', icon: <FileImage size={15} className="opacity-70" />,  badge: 'JPEG' },
+  { key: 'webp', label: 'Export as WEBP', icon: <Globe size={15} className="opacity-70" />,      badge: 'WEBP' },
+  { key: 'svg',  label: 'Export as SVG',  icon: <Code2 size={15} className="opacity-70" />,      badge: 'SVG' },
+  { key: 'pdf',  label: 'Export as PDF',  icon: <FileText size={15} className="opacity-70" />,   badge: 'PDF' },
 ];
 
 export default function Toolbar({ fabricRef, undoStack, setUndoStack, redoStack, setRedoStack }) {
@@ -317,14 +322,76 @@ export default function Toolbar({ fabricRef, undoStack, setUndoStack, redoStack,
         </button>
 
         {showExport && (
-          <div className="export-dropdown glass" onMouseLeave={() => setShowExport(false)}>
+          <div
+            onMouseLeave={() => setShowExport(false)}
+            style={{
+              position: 'absolute',
+              top: '100%',
+              right: 0,
+              marginTop: 8,
+              zIndex: 999999,
+              background: 'rgba(30, 30, 40, 0.75)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 12,
+              padding: '4px 0',
+              minWidth: 200,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2)',
+              fontFamily: 'Inter, sans-serif',
+              display: 'flex',
+              flexDirection: 'column',
+              animation: 'menuFadeIn 120ms ease-out',
+            }}
+          >
+            <style>{`
+              @keyframes menuFadeIn {
+                from { opacity: 0; transform: scale(0.95); }
+                to { opacity: 1; transform: scale(1); }
+              }
+              .mac-export-item {
+                height: 32px;
+                margin: 0 4px;
+                padding: 0 12px;
+                border-radius: 8px;
+                cursor: pointer;
+                color: #ffffff;
+                font-size: 13px;
+                font-weight: 400;
+                letter-spacing: 0.01em;
+                display: flex;
+                align-items: center;
+              }
+              .mac-export-item span.icon {
+                margin-right: 8px;
+                font-size: 16px;
+                opacity: 0.85;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 16px;
+              }
+              .mac-export-item:hover {
+                background: rgba(255,255,255,0.08);
+              }
+            `}</style>
             {EXPORT_FORMATS.map(f => (
               <div
                 key={f.key}
-                className="export-item"
+                className="mac-export-item"
                 onClick={() => handleExport(f.key)}
               >
+                <span className="icon">{f.icon}</span>
                 {f.label}
+                <span style={{
+                  fontSize: '10px',
+                  fontFamily: 'monospace',
+                  background: 'rgba(255,255,255,0.08)',
+                  borderRadius: '4px',
+                  padding: '1px 5px',
+                  marginLeft: 'auto',
+                  opacity: 0.6
+                }}>{f.badge}</span>
               </div>
             ))}
           </div>
