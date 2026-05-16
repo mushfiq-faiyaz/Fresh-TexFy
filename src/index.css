@@ -579,3 +579,29 @@ input[type=color]::-webkit-color-swatch {
   filter: blur(4px);
   animation: fruitShadow 3s ease-in-out infinite;
 }
+/* --- Delete Floating Button ------------------------ */
+.delete-float {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  background: rgba(25, 25, 30, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.2s, transform 0.15s ease, color 0.2s;
+}
+
+.delete-float:hover {
+  background: rgba(220, 38, 38, 0.85); /* red on hover */
+  transform: translate(-50%, -50%) scale(1.1);
+}

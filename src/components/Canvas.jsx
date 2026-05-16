@@ -18,90 +18,163 @@ import LayerPanel from './LayerPanel';
 // No custom SVG needed — browser renders native OS shapes.
 
 // ── Apply fabric v7 global selection style defaults ───────────────────────────
-const CORNER_SIZE = 8;
-
 if (fabric.InteractiveFabricObject) {
   Object.assign(fabric.InteractiveFabricObject.ownDefaults, {
-    borderColor: '#7c3aed',       // Canva-style thin purple
-    borderDashArray: null,        // solid — no dash
-    cornerColor: '#7c3aed',
-    cornerStrokeColor: '#ffffff',
-    cornerStyle: 'circle',
-    cornerSize: CORNER_SIZE,
-    borderScaleFactor: 1,         // thin 1px border
+    borderColor: 'rgba(107, 95, 228, 0.85)',       // #6B5FE4 Figma/Linear style
+    borderDashArray: null,
+    cornerColor: '#ffffff',
+    cornerStrokeColor: 'rgba(107, 95, 228, 0.85)',
+    cornerStyle: 'rect',
+    cornerSize: 8,
+    borderScaleFactor: 1.5,
     transparentCorners: false,
     borderOpacity: 1,
-    padding: 4,                   // small gap between object and border
+    padding: 0,                   // crisp padding
   });
 } else {
-  fabric.Object.prototype.borderColor = '#7c3aed';
+  fabric.Object.prototype.borderColor = 'rgba(107, 95, 228, 0.85)';
   fabric.Object.prototype.borderDashArray = null;
-  fabric.Object.prototype.cornerColor = '#7c3aed';
-  fabric.Object.prototype.cornerStrokeColor = '#ffffff';
-  fabric.Object.prototype.cornerStyle = 'circle';
-  fabric.Object.prototype.cornerSize = CORNER_SIZE;
-  fabric.Object.prototype.borderScaleFactor = 1;
+  fabric.Object.prototype.cornerColor = '#ffffff';
+  fabric.Object.prototype.cornerStrokeColor = 'rgba(107, 95, 228, 0.85)';
+  fabric.Object.prototype.cornerStyle = 'rect';
+  fabric.Object.prototype.cornerSize = 8;
+  fabric.Object.prototype.borderScaleFactor = 1.5;
   fabric.Object.prototype.transparentCorners = false;
   fabric.Object.prototype.borderOpacity = 1;
-  fabric.Object.prototype.padding = 4;
+  fabric.Object.prototype.padding = 0;
 }
 
 // ── Custom control render functions ────────────────────────────────────────────
-// Filled circle for corner handles
-function renderFilledCircle(ctx, left, top, _styleOverride, fabricObject, controlPoint) {
-  const size = CORNER_SIZE;
+// Small rounded square for corner handles
+function renderCornerSquare(key, ctx, left, top, _styleOverride, fabricObject) {
+  const canvas = fabricObject.canvas;
+  const isHovered = canvas && canvas._hoveredCorner === key && canvas._hoveredTarget === fabricObject;
+  const size = isHovered ? 8 * 1.2 : 8;
+
   ctx.save();
   ctx.translate(left, top);
   if (fabricObject.angle) ctx.rotate(fabric.util.degreesToRadians(fabricObject.angle));
+
+  ctx.shadowColor = 'rgba(0,0,0,0.2)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetY = 1;
+
   ctx.beginPath();
-  ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+  const r = 2; // border-radius
+  const w = size, h = size;
+  const x = -w / 2, y = -h / 2;
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+
   ctx.fillStyle = '#ffffff';
   ctx.fill();
-  ctx.strokeStyle = '#7c3aed';
+
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = '#6B5FE4';
   ctx.lineWidth = 1.5;
   ctx.stroke();
+
   ctx.restore();
 }
 
-// Hollow (ring) circle for edge handles
-function renderHollowCircle(ctx, left, top, _styleOverride, fabricObject, controlPoint) {
-  const size = 7;
+// Even smaller rounded square for edge handles
+function renderEdgeSquare(key, ctx, left, top, _styleOverride, fabricObject) {
+  const canvas = fabricObject.canvas;
+  const isHovered = canvas && canvas._hoveredCorner === key && canvas._hoveredTarget === fabricObject;
+  const size = isHovered ? 6 * 1.2 : 6;
+
   ctx.save();
   ctx.translate(left, top);
   if (fabricObject.angle) ctx.rotate(fabric.util.degreesToRadians(fabricObject.angle));
+
+  ctx.shadowColor = 'rgba(0,0,0,0.15)';
+  ctx.shadowBlur = 3;
+  ctx.shadowOffsetY = 1;
+
   ctx.beginPath();
-  ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
-  ctx.fillStyle = '#ffffff';
+  const r = 1.5;
+  const w = size, h = size;
+  const x = -w / 2, y = -h / 2;
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
   ctx.fill();
-  ctx.strokeStyle = '#7c3aed';
+
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(107, 95, 228, 0.8)';
   ctx.lineWidth = 1.5;
   ctx.stroke();
+
   ctx.restore();
 }
 
-// Rotate handle — clean circle
-function renderRotateHandle(ctx, left, top, _styleOverride, fabricObject) {
-  const size = 9;
+// Rotate handle — sleek curved arrow icon (↻)
+function renderRotateHandle(key, ctx, left, top, _styleOverride, fabricObject) {
+  const canvas = fabricObject.canvas;
+  const isHovered = canvas && canvas._hoveredCorner === key && canvas._hoveredTarget === fabricObject;
+  const size = isHovered ? 18 * 1.15 : 18;
+
   ctx.save();
   ctx.translate(left, top);
   if (fabricObject.angle) ctx.rotate(fabric.util.degreesToRadians(fabricObject.angle));
+
+  ctx.shadowColor = 'rgba(0,0,0,0.15)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetY = 1;
+
   ctx.beginPath();
   ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
   ctx.fillStyle = '#ffffff';
   ctx.fill();
-  ctx.strokeStyle = '#7c3aed';
-  ctx.lineWidth = 1.5;
+
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = 1;
   ctx.stroke();
-  // Small rotation arc indicator
+
+  // Curved arrow icon
   ctx.beginPath();
-  ctx.arc(0, 0, 2.5, 0, Math.PI * 1.5);
-  ctx.strokeStyle = '#7c3aed';
+  const arcRadius = size * 0.28;
+  ctx.arc(0, 0, arcRadius, -Math.PI * 0.6, Math.PI * 0.8);
+  ctx.strokeStyle = '#333333';
   ctx.lineWidth = 1.5;
   ctx.stroke();
+
+  const tipX = arcRadius * Math.cos(Math.PI * 0.8);
+  const tipY = arcRadius * Math.sin(Math.PI * 0.8);
+  ctx.beginPath();
+  ctx.moveTo(tipX + 2.5, tipY - 0.5);
+  ctx.lineTo(tipX, tipY);
+  ctx.lineTo(tipX + 0.5, tipY - 3);
+  ctx.stroke();
+
   ctx.restore();
 }
 
 // ── Custom SVG Cursors for Canvas Resizing ───────────────────────────────────
+// Custom rotated I-beam cursor for text
+function getRotatedIBeamCursor(angle) {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><g transform='rotate(${angle || 0},12,12)' stroke='black' stroke-width='1.5' stroke-linecap='round'><path d='M10,4L14,4M12,4L12,20M10,20L14,20'/></g></svg>`;
+  const encoded = encodeURIComponent(svg).replace(/'/g, '%27').replace(/"/g, '%22');
+  return `url("data:image/svg+xml,${encoded}") 12 12, text`;
+}
 const CURSOR_NWSE = `url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2724%27%20height%3D%2724%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cg%20transform%3D%27rotate%28-45%2C12%2C12%29%27%20fill%3D%27black%27%20stroke%3D%27white%27%20stroke-width%3D%271.5%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%2C4L17%2C8L13.5%2C8L13.5%2C16L17%2C16L12%2C20L7%2C16L10.5%2C16L10.5%2C8L7%2C8Z%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") 12 12, nwse-resize`;
 
 const CURSOR_NESW = `url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2724%27%20height%3D%2724%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cg%20transform%3D%27rotate%2845%2C12%2C12%29%27%20fill%3D%27black%27%20stroke%3D%27white%27%20stroke-width%3D%271.5%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%2C4L17%2C8L13.5%2C8L13.5%2C16L17%2C16L12%2C20L7%2C16L10.5%2C16L10.5%2C8L7%2C8Z%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") 12 12, nesw-resize`;
@@ -122,11 +195,10 @@ function applyCustomControls(obj) {
 
   ['tl', 'tr', 'bl', 'br', 'mt', 'mb', 'ml', 'mr'].forEach(key => {
     if (obj.controls[key]) {
-      // Corners get filled circles and CORNER_SIZE, edges get hollow circles and 10px size
       const isCorner = ['tl', 'tr', 'bl', 'br'].includes(key);
-      obj.controls[key].render = isCorner ? renderFilledCircle : renderHollowCircle;
-      obj.controls[key].sizeX = isCorner ? CORNER_SIZE : 10;
-      obj.controls[key].sizeY = isCorner ? CORNER_SIZE : 10;
+      obj.controls[key].render = isCorner ? renderCornerSquare.bind(null, key) : renderEdgeSquare.bind(null, key);
+      obj.controls[key].sizeX = isCorner ? 12 : 10;
+      obj.controls[key].sizeY = isCorner ? 12 : 10;
       
       // Dynamic rotation-aware cursor
       obj.controls[key].cursorStyleHandler = (eventData, control, fabricObject) => {
@@ -140,11 +212,17 @@ function applyCustomControls(obj) {
   });
 
   if (obj.controls['mtr']) {
-    obj.controls['mtr'].render = renderRotateHandle;
-    obj.controls['mtr'].cursorStyle = 'crosshair';  // Crosshair for rotate
-    delete obj.controls['mtr'].cursorStyleHandler; // Force custom cursor
-    obj.controls['mtr'].sizeX = 12;
-    obj.controls['mtr'].sizeY = 12;
+    obj.controls['mtr'].render = renderRotateHandle.bind(null, 'mtr');
+    
+    // Create custom SVG rotate cursor (or use crosshair/alias)
+    const rotateSvg = `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><g fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/></g></svg>`;
+    const rotateEncoded = encodeURIComponent(rotateSvg).replace(/'/g, '%27').replace(/"/g, '%22');
+    obj.controls['mtr'].cursorStyle = `url("data:image/svg+xml,${rotateEncoded}") 12 12, alias`;
+    
+    delete obj.controls['mtr'].cursorStyleHandler;
+    obj.controls['mtr'].sizeX = 18;
+    obj.controls['mtr'].sizeY = 18;
+    obj.controls['mtr'].offsetY = -22; // Push it up slightly more
   }
 }
 
@@ -236,26 +314,64 @@ export default function Canvas({
     });
     fabricRef.current = canvas;
 
+    const CURSOR_GRAB = `url('/hand-open.svg') 16 16, grab`;
+    const CURSOR_GRABBING = `url('/hand-closed.svg') 16 16, grabbing`;
+
     // ── Context-sensitive cursors ─────────────────────────────────────────
     // Fabric automatically reads `cursorStyle` from controls and calls
     // canvas.setCursor(). We only need to set the defaults + text special-case.
     canvas.defaultCursor  = 'default';   // Arrow — empty canvas
-    canvas.hoverCursor    = 'move';      // Sizeall — hovering any object
-    canvas.moveCursor     = 'grabbing';  // grabbing — while moving
+    canvas.hoverCursor    = CURSOR_GRAB; // Open hand — hovering any object
+    canvas.moveCursor     = CURSOR_GRABBING; // Closed hand — while moving
 
     // Grabbing cursor while dragging
     const upper = canvas.upperCanvasEl;
     canvas.on('mouse:down', (e) => {
       if (e.target && !e.target.isGuide && !canvas.isDrawingMode) {
-        if (upper) upper.style.cursor = 'grabbing';
+        if (upper) upper.style.cursor = CURSOR_GRABBING;
       }
     });
     canvas.on('mouse:up', () => {
       // Let Fabric reset cursor on next mousemove naturally
       if (upper) upper.style.cursor = '';
     });
+    
+    // Dynamic text hover cursor (I-beam rotation)
+    canvas.on('mouse:move', (e) => {
+      const obj = e.target;
+      if (obj && obj.type === 'i-text') {
+        if (!obj.__corner) {
+          obj.hoverCursor = getRotatedIBeamCursor(obj.angle);
+        }
+      }
+    });
 
+    // Share rotation with the hidden textarea (native caret alignment) and lock custom cursor
+    canvas.on('text:editing:entered', (e) => {
+      const obj = e.target;
+      if (obj && obj.type === 'i-text') {
+        const rotatedCursor = getRotatedIBeamCursor(obj.angle);
+        
+        // Fabric hardcodes these to 'text' internally when editing, so we must override them here
+        obj.hoverCursor = rotatedCursor;
+        canvas.defaultCursor = rotatedCursor;
+        canvas.moveCursor = rotatedCursor;
 
+        if (obj.hiddenTextarea) {
+          obj.hiddenTextarea.style.transform = `rotate(${obj.angle}deg)`;
+          obj.hiddenTextarea.style.transformOrigin = 'center center';
+        }
+        
+        if (upper) upper.style.cursor = rotatedCursor;
+      }
+    });
+
+    // Restore cursors when editing is finished
+    canvas.on('text:editing:exited', () => {
+      canvas.defaultCursor = 'default';
+      canvas.moveCursor = CURSOR_GRABBING;
+      if (upper) upper.style.cursor = 'default';
+    });
 
     // Object events
     canvas.on('selection:created', handleSelection);
@@ -1974,13 +2090,33 @@ export default function Canvas({
     if (!canvas) return;
     const obj = canvas.getActiveObject();
     if (!obj) { setDeletePos(null); return; }
-    const bound = obj.getBoundingRect();
+    
     const z = zoom / 100;
+
+    // Position delete button exactly 20px above the rotation handle
+    if (obj.oCoords && obj.oCoords.mtr && obj.oCoords.mt) {
+      const mtr = obj.oCoords.mtr;
+      const mt = obj.oCoords.mt;
+      const dx = mtr.x - mt.x;
+      const dy = mtr.y - mt.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 0) {
+        // Push 28px further out from the rotation handle
+        const push = 28 / dist; 
+        setDeletePos({
+          x: (mtr.x + dx * push) * z,
+          y: (mtr.y + dy * push) * z,
+        });
+        return;
+      }
+    }
+    
+    // Fallback if no rotation handle exists
+    const bound = obj.getBoundingRect();
     setDeletePos({
-      // Center X of the selection bounding box
       x: (bound.left + bound.width / 2) * z,
-      // Positioned further above the top edge (more breathing room)
-      y: bound.top * z - 72,
+      y: bound.top * z - 40,
     });
   }, [zoom]);
 
