@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 /* ─── Eye icon ──────────────────────────────────────────────────────────── */
 function EyeIcon({ hidden }) {
@@ -96,52 +97,43 @@ function IconBtn({ children, onClick, title, color, danger }) {
   );
 }
 
-/* ─── Render a fabric object into a 2d context, centered & scaled to fit ─── */
 function renderObjIntoCtx(obj, ctx, W, H, pad = 4) {
-  return obj.clone().then(cloned => {
-    // Reset angle and position so we measure intrinsic size only
-    cloned.angle  = 0;
-    cloned.left   = 0;
-    cloned.top    = 0;
-    cloned.originX = 'left';
-    cloned.originY = 'top';
-    cloned.setCoords();
+  try {
+    // Generate an exact pixel-perfect canvas representation of the object
+    // This perfectly handles rotation, stroke, groups, and relative coordinates natively.
+    const objCanvas = obj.toCanvasElement({ multiplier: 1 });
 
-    // Use fabric's getScaledWidth/Height — gives true visual dimensions
-    const natW = cloned.getScaledWidth();
-    const natH = cloned.getScaledHeight();
+    const natW = objCanvas.width;
+    const natH = objCanvas.height;
     if (!natW || !natH) return;
 
     const availW = W - pad * 2;
     const availH = H - pad * 2;
 
-    // Scale UP or DOWN so the object fills the available area
+    // Scale down to fit within the thumbnail area
     const scale = Math.min(availW / natW, availH / natH);
 
-    cloned.scaleX = (cloned.scaleX || 1) * scale;
-    cloned.scaleY = (cloned.scaleY || 1) * scale;
-
-    // Center within the canvas
     const drawnW = natW * scale;
     const drawnH = natH * scale;
-    cloned.left = pad + (availW - drawnW) / 2;
-    cloned.top  = pad + (availH - drawnH) / 2;
-
-    cloned.selectable = false;
-    cloned.evented    = false;
+    const left = pad + (availW - drawnW) / 2;
+    const top = pad + (availH - drawnH) / 2;
 
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, W, H);
-    ctx.save();
-    cloned.setCoords();
-    cloned.render(ctx);
-    ctx.restore();
-  }).catch(() => {});
+
+    // Smooth image scaling
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    ctx.drawImage(objCanvas, left, top, drawnW, drawnH);
+  } catch (err) {
+    console.warn('Layer thumbnail render error:', err);
+  }
 }
 
 
 /* ─── Layer thumbnail ────────────────────────────────────────────────────── */
-function LayerThumbnail({ layer, fabricRef }) {
+function LayerThumbnail({ layer, fabricRef, refreshKey }) {
   const canvasRef = useRef(null);
   const W = 68, H = 44;
 
@@ -155,7 +147,7 @@ function LayerThumbnail({ layer, fabricRef }) {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, W, H);
     renderObjIntoCtx(obj, ctx, W, H, 3);
-  }, [layer.id, layer.name, fabricRef]);
+  }, [layer.id, layer.name, fabricRef, refreshKey]);
 
   return (
     <canvas
@@ -176,7 +168,7 @@ function LayerThumbnail({ layer, fabricRef }) {
 }
 
 /* ─── Popup hover preview ─────────────────────────────────────────────────── */
-function LayerPreviewPopup({ layer, fabricRef, anchorRect }) {
+function LayerPreviewPopup({ layer, fabricRef, anchorRect, refreshKey }) {
   const canvasRef = useRef(null);
   const POP_W = 220;
   const POP_H = 160;
@@ -192,7 +184,7 @@ function LayerPreviewPopup({ layer, fabricRef, anchorRect }) {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, POP_W, POP_H - LABEL_H);
     renderObjIntoCtx(obj, ctx, POP_W, POP_H - LABEL_H, 12);
-  }, [layer.id, fabricRef]);
+  }, [layer.id, fabricRef, refreshKey]);
 
   if (!anchorRect) return null;
 
@@ -201,15 +193,15 @@ function LayerPreviewPopup({ layer, fabricRef, anchorRect }) {
   let left, top;
   if (spaceRight >= POP_W + 12) {
     left = anchorRect.right + 10;
-    top  = anchorRect.top + anchorRect.height / 2 - POP_H / 2;
+    top = anchorRect.top + anchorRect.height / 2 - POP_H / 2;
   } else {
     // Not enough room right → show above
     left = anchorRect.left;
-    top  = anchorRect.top - POP_H - 8;
+    top = anchorRect.top - POP_H - 8;
   }
   // Clamp within viewport
-  top  = Math.max(8, Math.min(top,  window.innerHeight - POP_H - 8));
-  left = Math.max(8, Math.min(left, window.innerWidth  - POP_W - 8));
+  top = Math.max(8, Math.min(top, window.innerHeight - POP_H - 8));
+  left = Math.max(8, Math.min(left, window.innerWidth - POP_W - 8));
 
   return (
     <div
@@ -273,9 +265,103 @@ function GripIcon() {
   );
 }
 
+/* ─── Context Menu ──────────────────────────────────────────────────────── */
+function LayerContextMenu({ x, y, onClose, onRename, onRefresh, onExport, onDelete }) {
+  useEffect(() => {
+    let mousedownHandler;
+    const timer = setTimeout(() => {
+      mousedownHandler = (e) => {
+        // Only close on left clicks (button 0) to avoid closing when right-clicking again
+        if (e.button === 0) onClose();
+      };
+      document.addEventListener('mousedown', mousedownHandler);
+    }, 50);
+
+    const handleEsc = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleEsc);
+
+    return () => {
+      clearTimeout(timer);
+      if (mousedownHandler) document.removeEventListener('mousedown', mousedownHandler);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [onClose]);
+
+  // Ensure menu stays within viewport
+  const safeX = Math.min(x, window.innerWidth - 180);
+  const safeY = Math.min(y, window.innerHeight - 180);
+
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        top: safeY,
+        left: safeX,
+        zIndex: 999999,
+        background: '#1e1e2e',
+        border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: 8,
+        padding: 6,
+        minWidth: 160,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        fontFamily: 'Inter, sans-serif',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+        animation: 'menuFadeIn 0.1s cubic-bezier(0.16, 1, 0.3, 1)',
+      }}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <style>{`
+        @keyframes menuFadeIn {
+          from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .mac-context-item {
+          padding: 6px 10px;
+          border-radius: 4px;
+          cursor: pointer;
+          color: #ffffff;
+          font-size: 12px;
+          font-weight: 500;
+          display: flex;
+          align-items: center;
+          transition: background 0.1s, color 0.1s;
+        }
+        .mac-context-item span {
+          margin-right: 8px;
+          font-size: 14px;
+        }
+        .mac-context-item:hover {
+          background: #8b5cf6; /* Purple hover */
+        }
+        .mac-context-item.danger:hover {
+          background: #ef4444; /* Red hover for delete */
+        }
+      `}</style>
+      <div className="mac-context-item" onClick={() => { onRefresh(); onClose(); }}>
+        <span>🔄</span> Refresh Thumbnail
+      </div>
+      <div className="mac-context-item" onClick={() => { onRename(); onClose(); }}>
+        <span>✏️</span> Rename
+      </div>
+      <div className="mac-context-item" onClick={() => { onExport(); onClose(); }}>
+        <span>📤</span> Export Layer
+      </div>
+      <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '4px' }} />
+      <div className="mac-context-item danger" style={{ color: '#ef4444' }} onClick={() => { onDelete(); onClose(); }}>
+        <span>🗑️</span> Delete
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 /* ─── Single layer row ──────────────────────────────────────────────────── */
 function LayerRow({
-  layer, isActive, onSelect, onToggleVisibility, onToggleLock, onDelete, fabricRef,
+  layer, isActive, onSelect, onToggleVisibility, onToggleLock, onDelete, onRenameLayer, fabricRef,
   isDragging, dropIndicator, onDragStart, onDragOver, onDragEnd, onDrop,
 }) {
   const [hovered, setHovered] = useState(false);
@@ -283,6 +369,30 @@ function LayerRow({
   const [anchorRect, setAnchorRect] = useState(null);
   const rowRef = useRef(null);
   const popupTimerRef = useRef(null);
+
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [contextMenu, setContextMenu] = useState(null);
+
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [editName, setEditName] = useState(layer.name);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isRenaming && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isRenaming]);
+
+  const commitRename = () => {
+    setIsRenaming(false);
+    if (editName.trim() && editName !== layer.name) {
+      onRenameLayer?.(layer.id, editName.trim());
+      layer.name = editName.trim();
+    } else {
+      setEditName(layer.name);
+    }
+  };
 
   const handleRowEnter = () => {
     if (rowRef.current) {
@@ -295,33 +405,122 @@ function LayerRow({
     setShowPopup(false);
   };
 
-  useEffect(() => () => clearTimeout(popupTimerRef.current), []);
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleRename = () => {
+    setIsRenaming(true);
+  };
+
+  const handleRefresh = () => {
+    setRefreshKey(k => k + 1);
+  };
+
+  const handleExport = () => {
+    const fab = fabricRef?.current;
+    if (!fab) return;
+    const obj = fab.getObjects().find(o => o.__layerId === layer.id);
+    if (!obj) return;
+
+    // Isolate object on canvas
+    const originalVisibility = fab.getObjects().map(o => ({ obj: o, visible: o.visible }));
+    fab.getObjects().forEach(o => { o.visible = (o === obj); });
+
+    // Save background and make it transparent
+    const oldBg = fab.backgroundColor;
+    fab.backgroundColor = 'transparent';
+
+    fab.renderAll();
+
+    // Export exact canvas size
+    const dataURL = fab.toDataURL({ format: 'png', multiplier: 1 });
+
+    // Restore state
+    fab.backgroundColor = oldBg;
+    originalVisibility.forEach(s => { s.obj.visible = s.visible; });
+    fab.renderAll();
+
+    // Trigger download
+    const a = document.createElement('a');
+    a.href = dataURL;
+    a.download = `${layer.name || 'layer_export'}.png`;
+    a.click();
+  };
+
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+
+    const nativeContextMenu = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({ x: e.clientX, y: e.clientY });
+    };
+
+    el.addEventListener('contextmenu', nativeContextMenu);
+    return () => {
+      el.removeEventListener('contextmenu', nativeContextMenu);
+      clearTimeout(popupTimerRef.current);
+    };
+  }, []);
 
   return (
-    <>
+    <div
+      style={{ position: 'relative', paddingBottom: 4 }}
+      onDragEnter={(e) => e.preventDefault()}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; onDragOver?.(layer.id, e); }}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDrop?.(layer.id); }}
+      onContextMenu={handleContextMenu}
+    >
       {/* Drop indicator ABOVE */}
       {dropIndicator === 'before' && (
         <div style={{
-          height: 2, borderRadius: 2, margin: '0 4px 2px 4px',
+          position: 'absolute', top: -1, left: 4, right: 4, height: 2, borderRadius: 2,
           background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
           boxShadow: '0 0 6px rgba(99,102,241,0.7)',
+          zIndex: 10, pointerEvents: 'none'
         }} />
       )}
 
       <div
         ref={rowRef}
         draggable
-        onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart?.(layer.id); }}
-        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; onDragOver?.(layer.id, e); }}
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move';
+
+          // Modern box drag image
+          const ghost = document.createElement('div');
+          ghost.textContent = layer.name || 'Layer';
+          ghost.style.background = '#252525';
+          ghost.style.color = '#ffffff';
+          ghost.style.padding = '6px 12px';
+          ghost.style.borderRadius = '6px';
+          ghost.style.border = '1px solid rgba(255,255,255,0.1)';
+          ghost.style.fontFamily = 'Inter, sans-serif';
+          ghost.style.fontSize = '12px';
+          ghost.style.fontWeight = '500';
+          ghost.style.boxShadow = '0 8px 24px rgba(0,0,0,0.5)';
+          ghost.style.position = 'absolute';
+          ghost.style.top = '-1000px';
+          ghost.style.left = '-1000px';
+          ghost.style.zIndex = '999999';
+          document.body.appendChild(ghost);
+          e.dataTransfer.setDragImage(ghost, 15, 15);
+          setTimeout(() => document.body.removeChild(ghost), 0);
+
+          onDragStart?.(layer.id);
+        }}
         onDragEnd={() => onDragEnd?.()}
-        onDrop={(e) => { e.preventDefault(); onDrop?.(layer.id); }}
+        onContextMenu={handleContextMenu}
         style={{
           display: 'flex',
           alignItems: 'center',
           height: 50,
           cursor: 'pointer',
           borderRadius: 8,
-          marginBottom: 4,
           border: isActive
             ? '1px solid rgba(99,102,241,0.7)'
             : dropIndicator
@@ -371,20 +570,50 @@ function LayerRow({
 
         {/* Thumbnail */}
         <div style={{ marginLeft: 5, marginRight: 5, flexShrink: 0, borderRadius: 5, overflow: 'hidden' }}>
-          <LayerThumbnail layer={layer} fabricRef={fabricRef} />
+          <LayerThumbnail layer={layer} fabricRef={fabricRef} refreshKey={refreshKey} />
         </div>
 
         {/* Layer name */}
-        <span style={{
-          flex: 1, fontSize: 11,
-          color: layer.visible ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.3)',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          paddingRight: 2,
-          fontStyle: layer.visible ? 'normal' : 'italic',
-          fontWeight: isActive ? 600 : 400,
-        }}>
-          {layer.name}
-        </span>
+        {isRenaming ? (
+          <input
+            ref={inputRef}
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitRename();
+              if (e.key === 'Escape') {
+                setEditName(layer.name);
+                setIsRenaming(false);
+              }
+            }}
+            style={{
+              flex: 1,
+              fontSize: 11,
+              color: '#fff',
+              background: 'rgba(0,0,0,0.3)',
+              border: '1px solid #8b5cf6',
+              borderRadius: 3,
+              padding: '2px 4px',
+              outline: 'none',
+              minWidth: 0,
+              marginRight: 2,
+            }}
+          />
+        ) : (
+          <span style={{
+            flex: 1, fontSize: 11,
+            color: layer.visible ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.3)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            paddingRight: 2,
+            fontStyle: layer.visible ? 'normal' : 'italic',
+            fontWeight: isActive ? 600 : 400,
+          }}
+            onDoubleClick={handleRename}
+          >
+            {layer.name}
+          </span>
+        )}
 
         {/* Icon buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 1, paddingRight: 5, flexShrink: 0 }}>
@@ -407,17 +636,31 @@ function LayerRow({
       {/* Drop indicator BELOW */}
       {dropIndicator === 'after' && (
         <div style={{
-          height: 2, borderRadius: 2, margin: '-2px 4px 4px 4px',
+          position: 'absolute', bottom: 3, left: 4, right: 4, height: 2, borderRadius: 2,
           background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
           boxShadow: '0 0 6px rgba(99,102,241,0.7)',
+          zIndex: 10, pointerEvents: 'none'
         }} />
       )}
 
       {/* Hover popup */}
       {showPopup && anchorRect && (
-        <LayerPreviewPopup layer={layer} fabricRef={fabricRef} anchorRect={anchorRect} />
+        <LayerPreviewPopup layer={layer} fabricRef={fabricRef} anchorRect={anchorRect} refreshKey={refreshKey} />
       )}
-    </>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <LayerContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          onRename={handleRename}
+          onRefresh={handleRefresh}
+          onExport={handleExport}
+          onDelete={onDelete}
+        />
+      )}
+    </div>
   );
 }
 
@@ -475,10 +718,10 @@ export default function LayerPanel({
   onReorderLayers,
   fabricRef,
 }) {
-  const [expanded,   setExpanded]   = useState(false);
-  const [dragId,     setDragId]     = useState(null);
+  const [expanded, setExpanded] = useState(false);
+  const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
-  const [dropPos,    setDropPos]    = useState('before');
+  const [dropPos, setDropPos] = useState('before');
 
   // Front-to-back order (panel top = frontmost, like Canva)
   const displayLayers = [...layers].reverse();
@@ -496,7 +739,7 @@ export default function LayerPanel({
   const handleDrop = (targetId) => {
     if (!dragId || dragId === targetId) { handleDragEnd(); return; }
     const fromIdx = displayLayers.findIndex(l => l.id === dragId);
-    const toIdx   = displayLayers.findIndex(l => l.id === targetId);
+    const toIdx = displayLayers.findIndex(l => l.id === targetId);
     if (fromIdx === -1 || toIdx === -1) { handleDragEnd(); return; }
     const newDisplay = displayLayers.filter(l => l.id !== dragId);
     let insertAt = newDisplay.findIndex(l => l.id === targetId);
