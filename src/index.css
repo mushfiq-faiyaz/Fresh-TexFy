@@ -559,3 +559,23 @@ input[type=color]::-webkit-color-swatch {
     transform: translateY(-50%) translateX(0) scale(1);
   }
 }
+
+
+/* Fresh-Texfy logo */
+
+@keyframes fruitFloat {
+  0%, 100% { transform: translateY(0px) rotate(-4deg); }
+  50% { transform: translateY(-8px) rotate(2deg); }
+}
+@keyframes fruitShadow {
+  0%, 100% { transform: scaleX(1); opacity: 0.2; }
+  50% { transform: scaleX(0.6); opacity: 0.08; }
+}
+.fruit-float { animation: fruitFloat 3s ease-in-out infinite; display: inline-block; }
+.fruit-shadow {
+  width: 28px; height: 6px;
+  background: #16a34a;
+  border-radius: 50%;
+  filter: blur(4px);
+  animation: fruitShadow 3s ease-in-out infinite;
+}

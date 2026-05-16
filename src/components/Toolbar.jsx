@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import * as fabric from 'fabric';
 import { jsPDF } from 'jspdf';
+import FreshTexfyLogo from './FreshTexfyLogo';
 
 /* ── Keyboard shortcuts reference ─────────────────────────────────────── */
 const SHORTCUTS = [
@@ -251,20 +252,7 @@ export default function Toolbar({ fabricRef, undoStack, setUndoStack, redoStack,
       }}
     >
       {/* Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 'auto' }}>
-        <div style={{
-          width: 30, height: 30,
-          background: 'linear-gradient(135deg, #7c3aed, #9333ea)',
-          borderRadius: 8,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 13, fontWeight: 700, color: '#fff',
-          boxShadow: '0 0 12px rgba(124,58,237,0.5)',
-          flexShrink: 0,
-        }}>Tx</div>
-        <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', color: '#fff' }}>
-          Texfy
-        </span>
-      </div>
+      <FreshTexfyLogo />
 
       {/* Undo */}
       <button
