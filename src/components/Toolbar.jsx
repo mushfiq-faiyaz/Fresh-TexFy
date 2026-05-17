@@ -4,6 +4,270 @@ import { jsPDF } from 'jspdf';
 import FreshTexfyLogo from './FreshTexfyLogo';
 import { Image, ImageIcon, FileImage, Globe, Code2, FileText } from 'lucide-react';
 
+// ── Canvas preset sizes ──────────────────────────────────────────────────────
+const CANVAS_PRESETS = [
+  { label: '800×600',   w: 800,  h: 600,  tag: 'Default' },
+  { label: '1280×720',  w: 1280, h: 720,  tag: 'HD' },
+  { label: '1920×1080', w: 1920, h: 1080, tag: 'Full HD' },
+  { label: '1080×1080', w: 1080, h: 1080, tag: 'Square' },
+  { label: '1080×1920', w: 1080, h: 1920, tag: 'Portrait' },
+];
+
+// ── Custom size modal ────────────────────────────────────────────────────────
+function CustomSizeModal({ currentW, currentH, onApply, onClose }) {
+  const [w, setW] = useState(String(currentW));
+  const [h, setH] = useState(String(currentH));
+
+  useEffect(() => {
+    const handleEsc = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [onClose]);
+
+  const handleApply = () => {
+    const nw = parseInt(w, 10);
+    const nh = parseInt(h, 10);
+    if (!isNaN(nw) && !isNaN(nh) && nw > 0 && nh > 0) {
+      onApply(nw, nh);
+    }
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 999999,
+        background: 'rgba(0,0,0,0.55)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'linear-gradient(145deg, rgba(35,35,52,0.98), rgba(22,22,36,0.98))',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 14,
+          padding: '24px 28px',
+          minWidth: 280,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.55)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>Custom Canvas Size</span>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)',
+              fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: '0 2px',
+            }}
+          >×</button>
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
+            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Width</label>
+            <input
+              type="number"
+              value={w}
+              onChange={e => setW(e.target.value)}
+              min={200}
+              max={4000}
+              style={{
+                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: 8,
+                padding: '7px 10px',
+                color: '#fff',
+                fontSize: 14,
+                width: '100%',
+                outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
+          </div>
+          <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 18, marginTop: 18 }}>×</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
+            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Height</label>
+            <input
+              type="number"
+              value={h}
+              onChange={e => setH(e.target.value)}
+              min={200}
+              max={4000}
+              style={{
+                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: 8,
+                padding: '7px 10px',
+                color: '#fff',
+                fontSize: 14,
+                width: '100%',
+                outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
+          </div>
+        </div>
+        <button
+          onClick={handleApply}
+          style={{
+            background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+            border: 'none',
+            borderRadius: 8,
+            color: '#fff',
+            fontWeight: 600,
+            fontSize: 14,
+            padding: '9px 0',
+            cursor: 'pointer',
+            transition: 'opacity 0.15s',
+          }}
+        >
+          Apply
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Canvas size picker button ────────────────────────────────────────────────
+function CanvasSizeButton({ canvasResizeRef }) {
+  const [open, setOpen] = useState(false);
+  const [showCustom, setShowCustom] = useState(false);
+  const [size, setSize] = useState({ w: 800, h: 600 });
+  const wrapperRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const applySize = (w, h) => {
+    setSize({ w, h });
+    setOpen(false);
+    setShowCustom(false);
+    if (canvasResizeRef && canvasResizeRef.current) {
+      canvasResizeRef.current(w, h);
+    }
+  };
+
+  return (
+    <>
+      <div ref={wrapperRef} style={{ position: 'relative' }}>
+        <button
+          id="canvas-size-btn"
+          onClick={() => setOpen(v => !v)}
+          title="Canvas size"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            height: 30,
+            padding: '0 10px',
+            borderRadius: 8,
+            background: open ? 'rgba(124,58,237,0.22)' : 'rgba(255,255,255,0.06)',
+            border: open ? '1px solid rgba(124,58,237,0.55)' : '1px solid rgba(255,255,255,0.1)',
+            color: open ? '#c4b5fd' : 'rgba(255,255,255,0.75)',
+            fontSize: 12,
+            fontWeight: 500,
+            fontFamily: 'Inter, system-ui, sans-serif',
+            cursor: 'pointer',
+            letterSpacing: '0.01em',
+            whiteSpace: 'nowrap',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7 }}>
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+          </svg>
+          {size.w}×{size.h}
+          <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 1 }}>▾</span>
+        </button>
+
+        {open && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 6px)',
+              left: 0,
+              zIndex: 999999,
+              background: 'rgba(22, 22, 36, 0.97)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255,255,255,0.09)',
+              borderRadius: 12,
+              padding: '4px 0',
+              minWidth: 190,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
+              animation: 'menuFadeIn 120ms ease-out',
+            }}
+          >
+            <style>{`
+              @keyframes menuFadeIn {
+                from { opacity: 0; transform: scale(0.95); }
+                to   { opacity: 1; transform: scale(1); }
+              }
+              .cs-item {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 12px;
+                height: 32px;
+                margin: 0 4px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 13px;
+                color: #fff;
+                font-family: Inter, system-ui, sans-serif;
+              }
+              .cs-item:hover { background: rgba(255,255,255,0.08); }
+            `}</style>
+            {CANVAS_PRESETS.map(p => (
+              <div key={p.label} className="cs-item" onClick={() => applySize(p.w, p.h)}>
+                <span>{p.label}</span>
+                <span style={{
+                  fontSize: 10,
+                  fontFamily: 'monospace',
+                  background: 'rgba(124,58,237,0.2)',
+                  color: '#c4b5fd',
+                  borderRadius: 4,
+                  padding: '1px 6px',
+                }}>{p.tag}</span>
+              </div>
+            ))}
+            <div style={{ height: 1, background: 'rgba(255,255,255,0.07)', margin: '4px 12px' }} />
+            <div
+              className="cs-item"
+              onClick={() => { setOpen(false); setShowCustom(true); }}
+            >
+              <span>Custom…</span>
+              <span style={{ fontSize: 13, opacity: 0.4 }}>&#9999;</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showCustom && (
+        <CustomSizeModal
+          currentW={size.w}
+          currentH={size.h}
+          onApply={applySize}
+          onClose={() => setShowCustom(false)}
+        />
+      )}
+    </>
+  );
+}
+
 /* ── Keyboard shortcuts reference ─────────────────────────────────────── */
 const SHORTCUTS = [
   { group: 'History',    items: [
@@ -155,7 +419,7 @@ const EXPORT_FORMATS = [
   { key: 'pdf',  label: 'Export as PDF',  icon: <FileText size={15} className="opacity-70" />,   badge: 'PDF' },
 ];
 
-export default function Toolbar({ fabricRef, undoStack, setUndoStack, redoStack, setRedoStack }) {
+export default function Toolbar({ fabricRef, canvasResizeRef, undoStack, setUndoStack, redoStack, setRedoStack }) {
   const [showExport, setShowExport] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const exportRef = useRef(null);
@@ -200,6 +464,11 @@ export default function Toolbar({ fabricRef, undoStack, setUndoStack, redoStack,
     const canvas = fabricRef.current;
     if (!canvas) return;
 
+    // Use multiplier:1 so the exported file is exactly the canvas pixel size.
+    // (multiplier:2 would always double it, e.g. 800×600 → 1600×1200)
+    const W = canvas.getWidth();
+    const H = canvas.getHeight();
+
     if (format === 'svg') {
       const svgData = canvas.toSVG();
       const blob = new Blob([svgData], { type: 'image/svg+xml' });
@@ -210,29 +479,29 @@ export default function Toolbar({ fabricRef, undoStack, setUndoStack, redoStack,
       link.click();
       URL.revokeObjectURL(url);
     } else if (format === 'pdf') {
-      const dataURL = canvas.toDataURL({ format: 'png', multiplier: 2 });
+      const dataURL = canvas.toDataURL({ format: 'png', multiplier: 1 });
       const pdf = new jsPDF({
-        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+        orientation: W > H ? 'landscape' : 'portrait',
         unit: 'px',
-        format: [canvas.width, canvas.height],
+        format: [W, H],
       });
-      pdf.addImage(dataURL, 'PNG', 0, 0, canvas.width, canvas.height);
+      pdf.addImage(dataURL, 'PNG', 0, 0, W, H);
       pdf.save('texfy-design.pdf');
     } else if (format === 'jpg' || format === 'jpeg') {
-      const dataURL = canvas.toDataURL({ format: 'jpeg', quality: 0.95, multiplier: 2 });
+      const dataURL = canvas.toDataURL({ format: 'jpeg', quality: 0.95, multiplier: 1 });
       const link = document.createElement('a');
       link.download = `texfy-design.${format}`;
       link.href = dataURL;
       link.click();
     } else if (format === 'webp') {
-      const dataURL = canvas.toDataURL({ format: 'webp', quality: 0.95, multiplier: 2 });
+      const dataURL = canvas.toDataURL({ format: 'webp', quality: 0.95, multiplier: 1 });
       const link = document.createElement('a');
       link.download = 'texfy-design.webp';
       link.href = dataURL;
       link.click();
     } else {
       // PNG default
-      const dataURL = canvas.toDataURL({ format: 'png', multiplier: 2 });
+      const dataURL = canvas.toDataURL({ format: 'png', multiplier: 1 });
       const link = document.createElement('a');
       link.download = 'texfy-design.png';
       link.href = dataURL;
@@ -258,6 +527,9 @@ export default function Toolbar({ fabricRef, undoStack, setUndoStack, redoStack,
     >
       {/* Logo */}
       <FreshTexfyLogo />
+
+      {/* Canvas Size Button */}
+      <CanvasSizeButton canvasResizeRef={canvasResizeRef} />
 
       {/* Undo */}
       <button

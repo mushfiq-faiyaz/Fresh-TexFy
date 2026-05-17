@@ -272,6 +272,8 @@ export default function Canvas({
   onToggleLock,
   onDeleteLayer,
   onReorderLayers,
+  // Canvas resize ref — Toolbar stores resizeCanvas(w,h) function here
+  canvasResizeRef,
 }) {
   const canvasElRef = useRef(null);
   const canvasWrapperRef = useRef(null);
@@ -1076,9 +1078,12 @@ export default function Canvas({
   const addText = useCallback(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
+    // Always read live canvas dimensions so text is centered in the CURRENT canvas size
+    const cx = canvas.getWidth() / 2;
+    const cy = canvas.getHeight() / 2;
     const text = new fabric.IText('Your text here', {
-      left: canvasSizeRef.current.w / 2,
-      top: canvasSizeRef.current.h / 2,
+      left: cx,
+      top: cy,
       originX: 'center',
       originY: 'center',
       fontSize: 32,
@@ -2151,6 +2156,27 @@ export default function Canvas({
       canvas.off('object:modified', update);
     };
   }, [zoom, updateDeletePos]);
+
+  // ── Programmatic resize (called by Toolbar canvas-size picker) ────────────
+  const resizeCanvas = useCallback((newW, newH) => {
+    newW = Math.max(MIN_W, Math.min(MAX_W, Math.round(newW)));
+    newH = Math.max(MIN_H, Math.min(MAX_H, Math.round(newH)));
+    canvasSizeRef.current = { w: newW, h: newH };
+    setCanvasSize({ w: newW, h: newH });
+    const canvas = fabricRef.current;
+    if (canvas) {
+      // setDimensions is the correct Fabric v5/v6/v7 API — updates both the
+      // DOM element size AND the internal backing store so toDataURL exports
+      // at the correct pixel dimensions.
+      canvas.setDimensions({ width: newW, height: newH });
+      canvas.renderAll();
+    }
+  }, []);
+
+  // Store resizeCanvas in the ref so Toolbar can call it
+  useEffect(() => {
+    if (canvasResizeRef) canvasResizeRef.current = resizeCanvas;
+  }, [canvasResizeRef, resizeCanvas]);
 
   // ── Canvas Resize Handles ─────────────────────────────
   const handleResizeMouseDown = useCallback((e, corner) => {

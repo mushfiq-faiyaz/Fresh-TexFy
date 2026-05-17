@@ -7,6 +7,7 @@ import Canvas from './components/Canvas';
 
 export default function App() {
   const fabricRef = useRef(null);
+  const canvasResizeRef = useRef(null); // Canvas stores resizeCanvas(w,h) here; Toolbar calls it
 
   // ── Selected object state ─────────────────────────────
   const [selectedObj, setSelectedObj] = useState(null);
@@ -278,6 +279,7 @@ export default function App() {
     <div className="app-root">
       <Toolbar
         fabricRef={fabricRef}
+        canvasResizeRef={canvasResizeRef}
         undoStack={undoStack}
         setUndoStack={setUndoStack}
         redoStack={redoStack}
@@ -328,6 +330,7 @@ export default function App() {
         {/* ── Canvas ── */}
         <Canvas
           fabricRef={fabricRef}
+          canvasResizeRef={canvasResizeRef}
           selectedObj={selectedObj}
           setSelectedObj={setSelectedObj}
           zoom={zoom}
