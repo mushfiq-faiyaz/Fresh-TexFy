@@ -277,6 +277,7 @@ export default function Canvas({
 }) {
   const canvasElRef = useRef(null);
   const canvasWrapperRef = useRef(null);
+  const canvasViewportRef = useRef(null); // the outer .canvas-viewport div
   const isHistorySaving = useRef(false);
   const blankLayerCountRef = useRef(0); // increments for each "+" blank layer added
 
@@ -2157,21 +2158,84 @@ export default function Canvas({
     };
   }, [zoom, updateDeletePos]);
 
+  // ── Helper: scale all canvas objects proportionally to new canvas dimensions ──
+  const scaleObjectsToNewSize = useCallback((canvas, oldW, oldH, newW, newH) => {
+    if (!canvas || oldW === 0 || oldH === 0) return;
+    const ratioX = newW / oldW;
+    const ratioY = newH / oldH;
+    canvas.getObjects().forEach(obj => {
+      // Skip guide lines and blank-layer sentinels
+      if (obj.isGuide || obj.isCenterGuide || obj.__isBlankLayer) return;
+
+      // Scale position proportionally
+      obj.set({
+        left: (obj.left ?? 0) * ratioX,
+        top: (obj.top ?? 0) * ratioY,
+      });
+
+      // In Fabric.js the *rendered* size of every object is:
+      //   width * scaleX  and  height * scaleY
+      // width/height are intrinsic (image natural px, text auto-width, etc.)
+      // so we must multiply scaleX/scaleY, NOT width/height.
+      if (obj.type === 'i-text' || obj.type === 'text') {
+        // For text: scale fontSize (baked-in size) by avg ratio so glyphs resize
+        // evenly; keep scaleX/scaleY at 1 to avoid stretching letterforms.
+        const avgRatio = (ratioX + ratioY) / 2;
+        obj.set('fontSize', (obj.fontSize ?? 32) * avgRatio);
+      } else {
+        // For images, paths, rects, etc.: multiply the render scale
+        obj.set({
+          scaleX: (obj.scaleX ?? 1) * ratioX,
+          scaleY: (obj.scaleY ?? 1) * ratioY,
+        });
+      }
+
+      obj.setCoords();
+    });
+  }, []);
+
+  // ── Auto-fit zoom whenever canvas size changes (or on first mount) ─────────
+  // Uses requestAnimationFrame so clientWidth/clientHeight are always valid.
+  useEffect(() => {
+    const PAD = 60;
+    let rafId;
+    rafId = requestAnimationFrame(() => {
+      const viewport = canvasViewportRef.current;
+      if (!viewport) return;
+      const vw = viewport.clientWidth  - PAD * 2;
+      const vh = viewport.clientHeight - PAD * 2;
+      if (vw <= 0 || vh <= 0) return;
+      const ratio = Math.min(vw / canvasSize.w, vh / canvasSize.h);
+      const pct = Math.round(Math.max(1, Math.min(500, ratio * 100)));
+      setZoom(pct);
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [canvasSize.w, canvasSize.h]); // fires on mount + every resize
+
   // ── Programmatic resize (called by Toolbar canvas-size picker) ────────────
   const resizeCanvas = useCallback((newW, newH) => {
     newW = Math.max(MIN_W, Math.min(MAX_W, Math.round(newW)));
     newH = Math.max(MIN_H, Math.min(MAX_H, Math.round(newH)));
+
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+
+    // Read old dimensions directly from Fabric — always the true source of truth
+    const oldW = canvas.getWidth();
+    const oldH = canvas.getHeight();
+
+    // Scale all objects BEFORE resizing the canvas
+    scaleObjectsToNewSize(canvas, oldW, oldH, newW, newH);
+
+    // Update Fabric canvas dimensions (also updates backing store for export)
+    canvas.setDimensions({ width: newW, height: newH });
+    canvas.renderAll();
+
+    // Keep the ref and state in sync — the canvasSize useEffect above
+    // will automatically trigger the fit-zoom via requestAnimationFrame.
     canvasSizeRef.current = { w: newW, h: newH };
     setCanvasSize({ w: newW, h: newH });
-    const canvas = fabricRef.current;
-    if (canvas) {
-      // setDimensions is the correct Fabric v5/v6/v7 API — updates both the
-      // DOM element size AND the internal backing store so toDataURL exports
-      // at the correct pixel dimensions.
-      canvas.setDimensions({ width: newW, height: newH });
-      canvas.renderAll();
-    }
-  }, []);
+  }, [scaleObjectsToNewSize]);
 
   // Store resizeCanvas in the ref so Toolbar can call it
   useEffect(() => {
@@ -2229,6 +2293,17 @@ export default function Canvas({
     };
 
     const onMouseUp = () => {
+      if (resizingRef.current) {
+        // Scale objects now that the drag-resize is confirmed
+        const cvs = fabricRef.current;
+        const { startW, startH } = resizingRef.current;
+        const { w: finalW, h: finalH } = canvasSizeRef.current;
+        if (cvs && (finalW !== startW || finalH !== startH)) {
+          scaleObjectsToNewSize(cvs, startW, startH, finalW, finalH);
+          cvs.renderAll();
+        }
+        // Fit-zoom is handled automatically by the canvasSize useEffect
+      }
       resizingRef.current = null;
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
@@ -2236,10 +2311,11 @@ export default function Canvas({
 
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
-  }, [zoom]);
+  }, [zoom, scaleObjectsToNewSize]);
 
   return (
     <div
+      ref={canvasViewportRef}
       className="canvas-viewport"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -2358,14 +2434,14 @@ export default function Canvas({
         <input
           type="range"
           className="zoom-slider"
-          min={25}
-          max={200}
+          min={1}
+          max={500}
           step={1}
           value={zoom}
           onChange={e => setZoom(parseInt(e.target.value))}
           onWheel={e => {
             e.preventDefault();
-            setZoom(z => Math.max(25, Math.min(200, z + (e.deltaY < 0 ? 5 : -5))));
+            setZoom(z => Math.max(1, Math.min(500, z + (e.deltaY < 0 ? 5 : -5))));
           }}
           title="Zoom"
         />
