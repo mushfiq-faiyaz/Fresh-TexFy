@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import * as fabric from 'fabric';
 
 import LayerPanel from './LayerPanel';
+import ContextMenu from './ContextMenu';
 
 // ── Cursor names — native OS cursors (Windows/macOS style) ──────────────────
 // These map to the system cursor set shown in the cursor reference image:
@@ -285,6 +286,25 @@ export default function Canvas({
   const [canvasSize, setCanvasSize] = useState({ w: DEFAULT_W, h: DEFAULT_H });
   const canvasSizeRef = useRef({ w: DEFAULT_W, h: DEFAULT_H });
 
+  // ── Context menu state ────────────────────────────────
+  const [ctxMenu, setCtxMenu] = useState({
+    visible: false,
+    x: 0,
+    y: 0,
+    contextType: 'canvas', // 'canvas' | 'text' | 'image'
+  });
+  // Internal clipboard for context-menu copy/paste (shared with keyboard handlers)
+  const ctxClipboardRef = useRef(null);
+  // Hidden file input for "Replace Image"
+  const replaceImgInputRef = useRef(null);
+  // Ref to "show custom size modal" trigger (set by the canvas-menu handler)
+  const showCustomSizeModalRef = useRef(null);
+  // Flag: is the right-clicked object locked?
+  const [ctxIsLocked, setCtxIsLocked] = useState(false);
+  // Stable ref so the init useEffect can always call the latest handleContextMenu
+  // without needing to re-subscribe every time zoom changes.
+  const handleContextMenuRef = useRef(null);
+
   // Drag-and-drop state
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -478,6 +498,8 @@ export default function Canvas({
 
     // ── Keyboard shortcuts ───────────────────────────
     let _clipboard = null; // local clipboard for copy/paste
+    // Keep ctxClipboardRef in sync with the local clipboard
+    const syncClipboard = (val) => { _clipboard = val; ctxClipboardRef.current = val; };
 
     const onKeyDown = (e) => {
       const isTyping =
@@ -510,7 +532,7 @@ export default function Canvas({
           case 'c':
             if (!isEditing && active) {
               e.preventDefault();
-              active.clone().then(cloned => { _clipboard = cloned; });
+              active.clone().then(cloned => { syncClipboard(cloned); });
             }
             break;
 
@@ -519,7 +541,7 @@ export default function Canvas({
             if (!isEditing && active) {
               e.preventDefault();
               active.clone().then(cloned => {
-                _clipboard = cloned;
+                syncClipboard(cloned);
                 const toRemove = canvas.getActiveObjects();
                 canvas.discardActiveObject();
                 toRemove.forEach(o => canvas.remove(o));
@@ -544,6 +566,7 @@ export default function Canvas({
                 // Update clipboard offset so repeated pastes cascade
                 _clipboard.left = (_clipboard.left ?? 50) + 20;
                 _clipboard.top = (_clipboard.top ?? 50) + 20;
+                ctxClipboardRef.current = _clipboard;
               });
             }
             break;
@@ -913,6 +936,20 @@ export default function Canvas({
     canvas.on('mouse:up', onMouseUp);
     // ── End Canva-style Smart Snapping ───────────────────
 
+    // ── Right-click context menu ─────────────────────────
+    // Fabric's upperCanvasEl sits on top and intercepts ALL pointer events,
+    // so we must attach contextmenu directly to it (not to a parent React div).
+    // We use a ref so zoom / state changes are always reflected without
+    // re-subscribing every render.
+    const onCtxMenu = (e) => {
+      e.preventDefault();          // always block the browser native menu
+      e.stopPropagation();
+      if (handleContextMenuRef.current) handleContextMenuRef.current(e);
+    };
+    // Also attach to lowerCanvasEl as fallback (some Fabric builds differ)
+    const lower = canvas.lowerCanvasEl;
+    if (upper) upper.addEventListener('contextmenu', onCtxMenu, true);
+    if (lower) lower.addEventListener('contextmenu', onCtxMenu, true);
 
     return () => {
       cancelAnimationFrame(rafId);
@@ -920,6 +957,8 @@ export default function Canvas({
       canvas.off('object:moving', onObjectMoving);
       canvas.off('object:modified', onObjectModified);
       canvas.off('mouse:up', onMouseUp);
+      if (upper) upper.removeEventListener('contextmenu', onCtxMenu, true);
+      if (lower) lower.removeEventListener('contextmenu', onCtxMenu, true);
       canvas.dispose();
     };
   }, []);
@@ -2052,6 +2091,343 @@ export default function Canvas({
     }
   }, [addText, addImage, addBlankLayer, separateLayers, separateColorWise, separateAreaWise, separateBothWise]);
 
+  // ── Context menu: close helper ────────────────────────
+  const closeCtxMenu = useCallback(() => {
+    setCtxMenu(m => ({ ...m, visible: false }));
+  }, []);
+
+  // ── Context menu: right-click handler ─────────────────
+  const handleContextMenu = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+
+    // Convert screen coordinates → canvas-local coordinates (accounts for CSS zoom transform)
+    const z = zoom / 100;
+    const wrapper = canvasWrapperRef.current;
+    const wRect = wrapper ? wrapper.getBoundingClientRect() : { left: 0, top: 0 };
+    const canvasX = (e.clientX - wRect.left) / z;
+    const canvasY = (e.clientY - wRect.top) / z;
+
+    // Find the topmost non-guide object at the right-click position
+    const allObjects = canvas.getObjects();
+    let target = null;
+    for (let i = allObjects.length - 1; i >= 0; i--) {
+      const obj = allObjects[i];
+      if (obj.isGuide || obj.isCenterGuide || obj.__isBlankLayer) continue;
+      if (!obj.visible) continue;
+      obj.setCoords();
+      const point = new fabric.Point(canvasX, canvasY);
+      if (obj.containsPoint(point) || (obj.getBoundingRect && (() => {
+        const br = obj.getBoundingRect(true);
+        return canvasX >= br.left && canvasX <= br.left + br.width &&
+               canvasY >= br.top  && canvasY <= br.top  + br.height;
+      })())) {
+        target = obj;
+        break;
+      }
+    }
+
+    const activeObj = canvas.getActiveObject();
+    // Prefer the directly hit object; fall back to whatever is already selected
+    const obj = target || activeObj;
+
+    let contextType = 'canvas';
+    if (obj && !obj.isGuide && !obj.isCenterGuide && !obj.__isBlankLayer) {
+      if (obj.type === 'i-text' || obj.type === 'text') {
+        contextType = 'text';
+      } else if (
+        obj.type === 'image' ||
+        obj.type === 'FabricImage' ||
+        obj.constructor?.name === 'FabricImage'
+      ) {
+        contextType = 'image';
+      } else {
+        // For other types (path, rect, etc.) still show the image menu as a generic fallback
+        contextType = 'image';
+      }
+      // Select the right-clicked object
+      if (obj !== activeObj) {
+        canvas.setActiveObject(obj);
+        canvas.requestRenderAll();
+        setSelectedObj(obj);
+      }
+      setCtxIsLocked(!!obj.lockMovementX && !!obj.lockMovementY);
+    } else {
+      setCtxIsLocked(false);
+    }
+
+    setCtxMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      contextType,
+    });
+  }, [zoom]);
+
+  // Keep the ref up to date whenever zoom or other deps change
+  // (the init useEffect listener reads this ref, so it's always current)
+  useEffect(() => {
+    handleContextMenuRef.current = handleContextMenu;
+  }, [handleContextMenu]);
+
+  // ── Context menu actions ──────────────────────────────
+  const ctxCopy = useCallback(() => {
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!active) return;
+    active.clone().then(cloned => { ctxClipboardRef.current = cloned; });
+  }, []);
+
+  const ctxPaste = useCallback(() => {
+    const canvas = fabricRef.current;
+    const clip = ctxClipboardRef.current;
+    if (!canvas || !clip) return;
+    clip.clone().then(cloned => {
+      cloned.set({ left: (clip.left ?? 50) + 20, top: (clip.top ?? 50) + 20 });
+      applyCustomControls(cloned);
+      canvas.add(cloned);
+      onLayerAddRef.current(cloned);
+      canvas.setActiveObject(cloned);
+      canvas.requestRenderAll();
+      setSelectedObj(cloned);
+      clip.left = (clip.left ?? 50) + 20;
+      clip.top = (clip.top ?? 50) + 20;
+      saveHistory();
+    });
+  }, [saveHistory]);
+
+  const ctxDuplicate = useCallback(() => {
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+    active.clone().then(cloned => {
+      cloned.set({ left: active.left + 20, top: active.top + 20 });
+      applyCustomControls(cloned);
+      canvas.add(cloned);
+      onLayerAddRef.current(cloned);
+      canvas.setActiveObject(cloned);
+      canvas.requestRenderAll();
+      setSelectedObj(cloned);
+      saveHistory();
+    });
+  }, [saveHistory]);
+
+  const ctxDelete = useCallback(() => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    const toRemove = canvas.getActiveObjects();
+    if (toRemove.length === 0) return;
+    canvas.discardActiveObject();
+    toRemove.forEach(o => canvas.remove(o));
+    canvas.renderAll();
+    setSelectedObj(null);
+    saveHistory();
+  }, [saveHistory]);
+
+  const ctxBringToFront = useCallback(() => {
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+    canvas.bringObjectToFront(active);
+    canvas.requestRenderAll();
+    saveHistory();
+  }, [saveHistory]);
+
+  const ctxSendToBack = useCallback(() => {
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+    canvas.sendObjectToBack(active);
+    // Keep guides behind
+    canvas.getObjects().filter(o => o.isGuide).forEach(g => canvas.sendObjectToBack(g));
+    canvas.requestRenderAll();
+    saveHistory();
+  }, [saveHistory]);
+
+  const ctxBringForward = useCallback(() => {
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+    canvas.bringObjectForward(active);
+    canvas.requestRenderAll();
+    saveHistory();
+  }, [saveHistory]);
+
+  const ctxSendBackward = useCallback(() => {
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+    canvas.sendObjectBackwards(active);
+    canvas.requestRenderAll();
+    saveHistory();
+  }, [saveHistory]);
+
+  const ctxEditText = useCallback(() => {
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active || active.type !== 'i-text') return;
+    canvas.setActiveObject(active);
+    active.enterEditing();
+    active.selectAll();
+    canvas.requestRenderAll();
+  }, []);
+
+  const ctxToggleLock = useCallback(() => {
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+    const locked = !!active.lockMovementX && !!active.lockMovementY;
+    const newLocked = !locked;
+    active.set({
+      lockMovementX: newLocked,
+      lockMovementY: newLocked,
+      lockScalingX: newLocked,
+      lockScalingY: newLocked,
+      lockRotation: newLocked,
+      hasControls: !newLocked,
+      selectable: true,
+    });
+    setCtxIsLocked(newLocked);
+    canvas.requestRenderAll();
+    saveHistory();
+  }, [saveHistory]);
+
+  const ctxRenameLayer = useCallback(() => {
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+    const currentName = active.text || 'Layer';
+    const newName = window.prompt('Rename layer:', currentName);
+    if (newName !== null && newName.trim() !== '') {
+      active.text = newName.trim();
+      onLayerNameUpdateRef.current(active);
+    }
+  }, []);
+
+  const ctxAlign = useCallback((direction) => {
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+    const cw = canvas.getWidth();
+    const ch = canvas.getHeight();
+    active.setCoords();
+    const br = active.getBoundingRect(true);
+
+    switch (direction) {
+      case 'centerH':
+        active.set({ left: active.left + (cw / 2 - (br.left + br.width / 2)) });
+        break;
+      case 'centerV':
+        active.set({ top: active.top + (ch / 2 - (br.top + br.height / 2)) });
+        break;
+      case 'left':
+        active.set({ left: active.left - br.left });
+        break;
+      case 'right':
+        active.set({ left: active.left + (cw - (br.left + br.width)) });
+        break;
+      case 'top':
+        active.set({ top: active.top - br.top });
+        break;
+      case 'bottom':
+        active.set({ top: active.top + (ch - (br.top + br.height)) });
+        break;
+      default:
+        break;
+    }
+    active.setCoords();
+    canvas.requestRenderAll();
+    saveHistory();
+  }, [saveHistory]);
+
+  const ctxReplaceImage = useCallback(() => {
+    if (replaceImgInputRef.current) {
+      replaceImgInputRef.current.value = '';
+      replaceImgInputRef.current.click();
+    }
+  }, []);
+
+  const handleReplaceImageFile = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const imgEl = new Image();
+      imgEl.onload = () => {
+        // Replace src on existing FabricImage
+        if (active.setElement) {
+          active.setElement(imgEl);
+        } else {
+          // Fallback: swap _element
+          active._element = imgEl;
+        }
+        // Re-scale to fit within canvas
+        const cw = canvas.getWidth();
+        const ch = canvas.getHeight();
+        const maxW = cw * 0.8;
+        const maxH = ch * 0.8;
+        const scale = Math.min(maxW / imgEl.width, maxH / imgEl.height, 1);
+        active.set({ scaleX: scale, scaleY: scale });
+        active.setCoords();
+        canvas.requestRenderAll();
+        saveHistory();
+      };
+      imgEl.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }, [saveHistory]);
+
+  const ctxFlipH = useCallback(() => {
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+    active.set('flipX', !active.flipX);
+    canvas.requestRenderAll();
+    saveHistory();
+  }, [saveHistory]);
+
+  const ctxFlipV = useCallback(() => {
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+    active.set('flipY', !active.flipY);
+    canvas.requestRenderAll();
+    saveHistory();
+  }, [saveHistory]);
+
+  // Upload image via file picker (for canvas empty menu)
+  const ctxUploadImage = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/webp';
+    input.onchange = (e) => {
+      const file = e.target.files?.[0];
+      if (file) addImage(file);
+    };
+    input.click();
+  }, [addImage]);
+
+  // ── Custom size modal (triggered from context menu) ────────────
+  const [ctxCustomSize, setCtxCustomSize] = useState(false);
+  const [ctxCustomW, setCtxCustomW] = useState(String(DEFAULT_W));
+  const [ctxCustomH, setCtxCustomH] = useState(String(DEFAULT_H));
+
+  // Wire the ref so ContextMenu can call it
+  useEffect(() => {
+    showCustomSizeModalRef.current = () => {
+      setCtxCustomW(String(canvasSizeRef.current.w));
+      setCtxCustomH(String(canvasSizeRef.current.h));
+      setCtxCustomSize(true);
+    };
+  }, []);
+
   // ── Drag and Drop handlers ────────────────────────────
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
@@ -2320,6 +2696,7 @@ export default function Canvas({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onContextMenu={handleContextMenu}
     >
       {/* ── Layer Separator Loading Overlay ── */}
       {isSeparating && (
@@ -2461,6 +2838,139 @@ export default function Canvas({
       />
 
       {/* ── Toast Notification ── */}
+      {/* ── Context Menu ── */}
+      <ContextMenu
+        visible={ctxMenu.visible}
+        x={ctxMenu.x}
+        y={ctxMenu.y}
+        contextType={ctxMenu.contextType}
+        onClose={closeCtxMenu}
+        hasClipboard={!!ctxClipboardRef.current}
+        isLocked={ctxIsLocked}
+        onCopy={ctxCopy}
+        onPaste={ctxPaste}
+        onDuplicate={ctxDuplicate}
+        onDelete={ctxDelete}
+        onBringToFront={ctxBringToFront}
+        onSendToBack={ctxSendToBack}
+        onBringForward={ctxBringForward}
+        onSendBackward={ctxSendBackward}
+        onEditText={ctxEditText}
+        onToggleLock={ctxToggleLock}
+        onRenameLayer={ctxRenameLayer}
+        onAlign={ctxAlign}
+        onReplaceImage={ctxReplaceImage}
+        onFlipH={ctxFlipH}
+        onFlipV={ctxFlipV}
+        onAddText={addText}
+        onUploadImage={ctxUploadImage}
+        onResizeCanvas={resizeCanvas}
+        showCustomSizeModal={() => showCustomSizeModalRef.current?.()}
+      />
+
+      {/* Hidden file input for Replace Image */}
+      <input
+        ref={replaceImgInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        style={{ display: 'none' }}
+        onChange={handleReplaceImageFile}
+      />
+
+      {/* Custom size modal (from context menu) */}
+      {ctxCustomSize && (
+        <div
+          onClick={() => setCtxCustomSize(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000002,
+            background: 'rgba(0,0,0,0.55)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(145deg, rgba(35,35,52,0.98), rgba(22,22,36,0.98))',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 14,
+              padding: '24px 28px',
+              minWidth: 280,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.55)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              fontFamily: 'Inter, system-ui, sans-serif',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>Custom Canvas Size</span>
+              <button
+                onClick={() => setCtxCustomSize(false)}
+                style={{
+                  background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)',
+                  fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: '0 2px',
+                }}
+              >×</button>
+            </div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Width</label>
+                <input
+                  type="number"
+                  value={ctxCustomW}
+                  onChange={e => setCtxCustomW(e.target.value)}
+                  min={200} max={4000}
+                  style={{
+                    background: 'rgba(255,255,255,0.07)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 8, padding: '7px 10px',
+                    color: '#fff', fontSize: 14, width: '100%',
+                    outline: 'none', fontFamily: 'inherit',
+                  }}
+                />
+              </div>
+              <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 18, marginTop: 18 }}>×</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Height</label>
+                <input
+                  type="number"
+                  value={ctxCustomH}
+                  onChange={e => setCtxCustomH(e.target.value)}
+                  min={200} max={4000}
+                  style={{
+                    background: 'rgba(255,255,255,0.07)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 8, padding: '7px 10px',
+                    color: '#fff', fontSize: 14, width: '100%',
+                    outline: 'none', fontFamily: 'inherit',
+                  }}
+                />
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                const nw = parseInt(ctxCustomW, 10);
+                const nh = parseInt(ctxCustomH, 10);
+                if (!isNaN(nw) && !isNaN(nh) && nw > 0 && nh > 0) {
+                  resizeCanvas(nw, nh);
+                  setCtxCustomSize(false);
+                }
+              }}
+              style={{
+                background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                border: 'none', borderRadius: 8,
+                color: '#fff', fontWeight: 600, fontSize: 14,
+                padding: '9px 0', cursor: 'pointer',
+                transition: 'opacity 0.15s',
+              }}
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div
           style={{
