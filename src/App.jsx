@@ -251,6 +251,68 @@ export default function App() {
     setActiveLayerId(prev => (prev === layerId ? null : prev));
   }, []);
 
+  // ── Panel: flatten selected layers into a Fabric.Group ──────────────────
+  const handleFlattenLayers = useCallback((layerIds) => {
+    if (!layerIds || layerIds.length < 2) return;
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+
+    // Gather fabric objects in the order they appear on canvas (back-to-front)
+    const allObjs = canvas.getObjects();
+    const targets = allObjs.filter(o => layerIds.includes(o.__layerId));
+    if (targets.length < 2) return;
+
+    // Deselect before grouping
+    canvas.discardActiveObject();
+
+    // Build a Fabric Group from the targets
+    const group = new (targets[0].constructor.prototype.constructor.name === 'FabricImage'
+      ? Object : Object)({
+      // fallback – we’ll use fabric.Group via dynamic import
+    });
+
+    // Use fabric.Group directly
+    import('fabric').then(({ Group }) => {
+      const fabricGroup = new Group(targets, { interactive: false });
+      const newId = `layer-group-${Date.now()}`;
+      fabricGroup.__layerId = newId;
+
+      // Remove originals and add group
+      targets.forEach(o => canvas.remove(o));
+      canvas.add(fabricGroup);
+
+      // Group count for name
+      setLayers(prev => {
+        const groupCount = prev.filter(l => l.name?.startsWith('Group')).length + 1;
+        // Find the topmost index among selected layers
+        const selectedLayerObjs = prev.filter(l => layerIds.includes(l.id));
+        const remaining = prev.filter(l => !layerIds.includes(l.id));
+        // Insert group at position of the highest-z selected layer
+        const topIdx = Math.max(...layerIds.map(id => prev.findIndex(l => l.id === id)));
+        const insertIdx = Math.max(0, topIdx - (selectedLayerObjs.length - 1));
+        const newLayer = {
+          id: newId,
+          number: insertIdx + 1,
+          name: `Group ${groupCount}`,
+          fabricObjectId: newId,
+          visible: true,
+          locked: false,
+        };
+        const next = [...remaining];
+        // Find insert position in remaining (after removing selected)
+        const refLayer = prev[topIdx];
+        const refIdxInRemaining = refLayer ? remaining.findIndex(l => l.id === refLayer.id) : remaining.length;
+        next.splice(Math.max(0, refIdxInRemaining), 0, newLayer);
+        return next;
+      });
+
+      setActiveLayerId(newId);
+      canvas.setActiveObject(fabricGroup);
+      canvas.requestRenderAll();
+      console.info(`[Texfy] Flattened ${targets.length} layers into a Group`);
+    });
+  }, []);
+
   // ── Shared toggle-tab style factory ────────────────────
   const tabStyle = (side) => ({
     position: 'absolute',
@@ -361,6 +423,7 @@ export default function App() {
           onToggleLock={handleToggleLock}
           onDeleteLayer={handleDeleteLayer}
           onReorderLayers={handleReorderLayers}
+          onFlattenLayers={handleFlattenLayers}
         />
 
         {/* ── Right sidebar + toggle ── */}

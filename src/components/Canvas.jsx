@@ -273,6 +273,7 @@ export default function Canvas({
   onToggleLock,
   onDeleteLayer,
   onReorderLayers,
+  onFlattenLayers,
   // Canvas resize ref — Toolbar stores resizeCanvas(w,h) function here
   canvasResizeRef,
 }) {
@@ -2910,6 +2911,7 @@ export default function Canvas({
         onDeleteLayer={onDeleteLayer}
         onAddLayer={addBlankLayer}
         onReorderLayers={onReorderLayers}
+        onFlattenLayers={onFlattenLayers}
         fabricRef={fabricRef}
       />
 

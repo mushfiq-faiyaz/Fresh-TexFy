@@ -266,21 +266,25 @@ function GripIcon() {
   );
 }
 
-/* ─── Context Menu ──────────────────────────────────────────────────────── */
-function LayerContextMenu({ x, y, onClose, onRename, onRefresh, onExport, onDelete }) {
+/* ─── Context Menu ──────────────────────────────────────────────── */
+function LayerContextMenu({
+  x, y, onClose, onRename, onRefresh, onExport, onDelete,
+  onMoveUp, onMoveDown, onMoveToTop, onMoveToBottom,
+  onFlatten, canFlatten,
+}) {
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
+  const moveItemRef = useRef(null);
+  const [submenuPos, setSubmenuPos] = useState({ x: 0, y: 0 });
+  const hideTimer = useRef(null);
+
   useEffect(() => {
     let mousedownHandler;
     const timer = setTimeout(() => {
-      mousedownHandler = (e) => {
-        // Only close on left clicks (button 0) to avoid closing when right-clicking again
-        if (e.button === 0) onClose();
-      };
+      mousedownHandler = (e) => { if (e.button === 0) onClose(); };
       document.addEventListener('mousedown', mousedownHandler);
     }, 50);
-
     const handleEsc = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', handleEsc);
-
     return () => {
       clearTimeout(timer);
       if (mousedownHandler) document.removeEventListener('mousedown', mousedownHandler);
@@ -288,93 +292,152 @@ function LayerContextMenu({ x, y, onClose, onRename, onRefresh, onExport, onDele
     };
   }, [onClose]);
 
-  // Ensure menu stays within viewport
-  const safeX = Math.min(x, window.innerWidth - 180);
-  const safeY = Math.min(y, window.innerHeight - 180);
+  const safeX = Math.min(x, window.innerWidth - 200);
+  const safeY = Math.min(y, window.innerHeight - 240);
+
+  const openSubmenu = () => {
+    if (!moveItemRef.current) return;
+    const rect = moveItemRef.current.getBoundingClientRect();
+    const SUBMENU_W = 180;
+    const spaceRight = window.innerWidth - rect.right;
+    setSubmenuPos({
+      x: spaceRight >= SUBMENU_W + 8 ? rect.right + 4 : rect.left - SUBMENU_W - 4,
+      y: rect.top,
+    });
+    setShowMoveMenu(true);
+  };
+
+  const scheduleHide = () => {
+    hideTimer.current = setTimeout(() => setShowMoveMenu(false), 120);
+  };
+  const cancelHide = () => clearTimeout(hideTimer.current);
+
+  const run = (fn) => { fn?.(); onClose(); };
+
+  const sharedMenuStyle = {
+    position: 'fixed',
+    zIndex: 999999,
+    background: 'rgba(28,28,32,0.96)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    border: '1px solid rgba(139,92,246,0.2)',
+    borderRadius: 12,
+    padding: '4px 0',
+    minWidth: 200,
+    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+    fontFamily: 'Inter, sans-serif',
+    display: 'flex',
+    flexDirection: 'column',
+    animation: 'menuFadeIn 120ms ease-out',
+  };
 
   return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        top: safeY,
-        left: safeX,
-        zIndex: 999999,
-        background: 'rgba(30, 30, 40, 0.75)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: 12,
-        padding: '4px 0',
-        minWidth: 200,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2)',
-        fontFamily: 'Inter, sans-serif',
-        display: 'flex',
-        flexDirection: 'column',
-        animation: 'menuFadeIn 120ms ease-out',
-      }}
-      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
-      onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-    >
+    <>
       <style>{`
         @keyframes menuFadeIn {
           from { opacity: 0; transform: scale(0.95); }
           to { opacity: 1; transform: scale(1); }
         }
-        .mac-context-item {
-          height: 32px;
-          margin: 0 4px;
-          padding: 0 12px;
-          border-radius: 8px;
-          cursor: default;
-          color: #ffffff;
-          font-size: 13px;
-          font-weight: 400;
+        .lp-ctx-item {
+          height: 32px; margin: 0 4px; padding: 0 12px;
+          border-radius: 8px; cursor: default;
+          color: #ffffff; font-size: 13px; font-weight: 400;
           letter-spacing: 0.01em;
-          display: flex;
-          align-items: center;
+          display: flex; align-items: center; gap: 8px;
+          transition: background 0.1s;
         }
-        .mac-context-item span.icon {
-          margin-right: 8px;
-          font-size: 16px;
-          opacity: 0.85;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 16px;
+        .lp-ctx-item:hover { background: rgba(255,255,255,0.08); }
+        .lp-ctx-item.danger { color: #ff5f57; }
+        .lp-ctx-item.danger:hover { background: rgba(255,95,87,0.15); }
+        .lp-ctx-item.disabled {
+          opacity: 0.38; cursor: not-allowed; pointer-events: none;
         }
-        .mac-context-item:hover {
-          background: rgba(255,255,255,0.08);
-        }
-        .mac-context-item.danger {
-          color: #ff5f57;
-        }
-        .mac-context-item.danger:hover {
-          background: rgba(255, 95, 87, 0.15); /* subtle red background for hover */
-        }
+        .lp-ctx-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 4px 0; }
       `}</style>
-      <div className="mac-context-item" onClick={() => { onRefresh(); onClose(); }}>
-        <span className="icon"><RefreshCw size={15} className="opacity-70" /></span> Refresh Thumbnail
+
+      {/* Main menu */}
+      <div style={{ ...sharedMenuStyle, top: safeY, left: safeX }}
+        onContextMenu={e => { e.preventDefault(); e.stopPropagation(); }}
+        onMouseDown={e => e.stopPropagation()}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="lp-ctx-item" onClick={() => run(onRefresh)}>
+          <RefreshCw size={14} style={{ opacity: 0.7, flexShrink: 0 }} /> Refresh Thumbnail
+        </div>
+        <div className="lp-ctx-item" onClick={() => run(onRename)}>
+          <Pencil size={14} style={{ opacity: 0.7, flexShrink: 0 }} /> Rename
+        </div>
+        <div className="lp-ctx-item" onClick={() => run(onExport)}>
+          <Download size={14} style={{ opacity: 0.7, flexShrink: 0 }} /> Export Layer
+        </div>
+
+        <div className="lp-ctx-divider" />
+
+        {/* Move item — hover opens submenu */}
+        <div
+          ref={moveItemRef}
+          className="lp-ctx-item"
+          onMouseEnter={() => { openSubmenu(); cancelHide(); }}
+          onMouseLeave={scheduleHide}
+        >
+          <span style={{ fontSize: 14, opacity: 0.7, flexShrink: 0, lineHeight: 1 }}>↕</span>
+          <span style={{ flex: 1 }}>Move</span>
+          <span style={{ color: '#888', fontSize: 11, marginLeft: 'auto' }}>▶</span>
+        </div>
+
+        {/* Flatten to Group */}
+        <div
+          className={`lp-ctx-item${canFlatten ? '' : ' disabled'}`}
+          onClick={canFlatten ? () => run(onFlatten) : undefined}
+          title={canFlatten ? 'Flatten selected layers into a group' : 'Select 2+ layers with Ctrl+Click first'}
+        >
+          <span style={{ fontSize: 14, flexShrink: 0, lineHeight: 1 }}>⊞</span>
+          Flatten to Group
+        </div>
+
+        <div className="lp-ctx-divider" />
+
+        <div className="lp-ctx-item danger" onClick={() => run(onDelete)}>
+          <Trash2 size={14} style={{ opacity: 0.7, flexShrink: 0 }} /> Delete
+        </div>
       </div>
-      <div className="mac-context-item" onClick={() => { onRename(); onClose(); }}>
-        <span className="icon"><Pencil size={15} className="opacity-70" /></span> Rename
-      </div>
-      <div className="mac-context-item" onClick={() => { onExport(); onClose(); }}>
-        <span className="icon"><Download size={15} className="opacity-70" /></span> Export Layer
-      </div>
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', margin: '4px 0' }} />
-      <div className="mac-context-item danger" onClick={() => { onDelete(); onClose(); }}>
-        <span className="icon"><Trash2 size={15} className="opacity-70" color="#ff5f57" /></span> Delete
-      </div>
-    </div>,
+
+      {/* Move submenu */}
+      {showMoveMenu && (
+        <div
+          style={{ ...sharedMenuStyle, top: submenuPos.y, left: submenuPos.x, minWidth: 160, animation: 'none' }}
+          onMouseEnter={cancelHide}
+          onMouseLeave={scheduleHide}
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+        >
+          {[
+            { label: 'Move Up',        icon: '↑', action: onMoveUp },
+            { label: 'Move Down',      icon: '↓', action: onMoveDown },
+            { label: 'Move to Top',    icon: '⇑', action: onMoveToTop },
+            { label: 'Move to Bottom', icon: '⇓', action: onMoveToBottom },
+          ].map(({ label, icon, action }) => (
+            <div
+              key={label}
+              className="lp-ctx-item"
+              onMouseDown={(e) => { e.stopPropagation(); run(action); }}
+            >
+              <span style={{ fontSize: 14, width: 16, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
+              {label}
+            </div>
+          ))}
+        </div>
+      )}
+    </>,
     document.body
   );
 }
 
-/* ─── Single layer row ──────────────────────────────────────────────────── */
+/* ─── Single layer row ────────────────────────────────────────────────── */
 function LayerRow({
-  layer, isActive, onSelect, onToggleVisibility, onToggleLock, onDelete, onRenameLayer, fabricRef,
+  layer, isActive, isSelected, onSelect, onToggleVisibility, onToggleLock, onDelete, onRenameLayer, fabricRef,
   isDragging, dropIndicator, onDragStart, onDragOver, onDragEnd, onDrop,
+  onMoveUp, onMoveDown, onMoveToTop, onMoveToBottom, onFlatten, canFlatten,
 }) {
   const [hovered, setHovered] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
@@ -546,14 +609,18 @@ function LayerRow({
           borderRadius: 8,
           border: isActive
             ? '1px solid rgba(99,102,241,0.7)'
-            : dropIndicator
-              ? '1px solid rgba(99,102,241,0.35)'
-              : '1px solid rgba(255,255,255,0.06)',
+            : isSelected
+              ? '1px solid rgba(167,139,250,0.6)'
+              : dropIndicator
+                ? '1px solid rgba(99,102,241,0.35)'
+                : '1px solid rgba(255,255,255,0.06)',
           background: isActive
             ? 'rgba(99,102,241,0.18)'
-            : hovered
-              ? 'rgba(255,255,255,0.09)'
-              : 'rgba(22,22,40,0.85)',
+            : isSelected
+              ? 'rgba(139,92,246,0.12)'
+              : hovered
+                ? 'rgba(255,255,255,0.09)'
+                : 'rgba(22,22,40,0.85)',
           opacity: isDragging ? 0.4 : 1,
           transition: 'background 0.15s, border-color 0.15s, opacity 0.15s',
           overflow: 'hidden',
@@ -562,7 +629,7 @@ function LayerRow({
         }}
         onMouseEnter={() => { setHovered(true); handleRowEnter(); }}
         onMouseLeave={() => { setHovered(false); handleRowLeave(); }}
-        onClick={onSelect}
+        onClick={(e) => onSelect(e)}
       >
         {/* Left accent bar */}
         <div style={{
@@ -692,6 +759,12 @@ function LayerRow({
           onRefresh={handleRefresh}
           onExport={handleExport}
           onDelete={onDelete}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+          onMoveToTop={onMoveToTop}
+          onMoveToBottom={onMoveToBottom}
+          onFlatten={onFlatten}
+          canFlatten={canFlatten}
         />
       )}
     </div>
@@ -750,6 +823,7 @@ export default function LayerPanel({
   onDeleteLayer,
   onAddLayer,
   onReorderLayers,
+  onFlattenLayers,
   fabricRef,
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -757,14 +831,16 @@ export default function LayerPanel({
   const [dragOverId, setDragOverId] = useState(null);
   const [dropPos, setDropPos] = useState('before');
 
+  // Multi-select: Set of selected layer IDs (Ctrl/Cmd+Click to toggle)
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
   // Front-to-back order (panel top = frontmost, like Canva)
   const displayLayers = [...layers].reverse();
   const totalLayers = layers.length;
 
+  // ── Drag ──────────────────────────────────────────────
   const handleDragStart = (id, e) => {
     setDragId(id);
-    // Store the dragged id in dataTransfer so drop is reliable even if state
-    // hasn't flushed yet (fixes the snap-back race condition)
     e.dataTransfer.setData('text/plain', String(id));
     e.dataTransfer.effectAllowed = 'move';
   };
@@ -773,7 +849,6 @@ export default function LayerPanel({
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     if (id === dragId) return;
-    // Use e.currentTarget (the full outer wrapper row) for reliable hit area
     const rect = e.currentTarget.getBoundingClientRect();
     setDragOverId(id);
     setDropPos(e.clientY < rect.top + rect.height / 2 ? 'before' : 'after');
@@ -781,7 +856,6 @@ export default function LayerPanel({
 
   const handleDrop = (targetId, e) => {
     e.preventDefault();
-    // Read from dataTransfer as the ground truth (state may be stale on fast drags)
     const transferredId = e.dataTransfer.getData('text/plain');
     const activeDragId = transferredId || dragId;
     if (!activeDragId || activeDragId === targetId) { handleDragEnd(); return; }
@@ -792,12 +866,64 @@ export default function LayerPanel({
     let insertAt = newDisplay.findIndex(l => l.id === targetId);
     if (dropPos === 'after') insertAt += 1;
     newDisplay.splice(insertAt, 0, displayLayers[fromIdx]);
-    // Update state immediately before any async re-render
     onReorderLayers?.(newDisplay.map(l => l.id));
     handleDragEnd();
   };
 
   const handleDragEnd = () => { setDragId(null); setDragOverId(null); };
+
+  // ── Multi-select ──────────────────────────────────────
+  const handleSelectRow = (id, e) => {
+    if (e.metaKey || e.ctrlKey) {
+      // Ctrl/Cmd+Click: toggle this id in the selection set
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    } else {
+      // Regular click: single-select + sync canvas
+      setSelectedIds(new Set([id]));
+      onSelectLayer(id);
+    }
+  };
+
+  // ── Move layer ────────────────────────────────────────
+  const handleMoveLayer = (id, direction) => {
+    // Work entirely in display space (front-to-back = top → bottom of panel)
+    const display = [...layers].reverse();
+    const n = display.length;
+    const fromIdx = display.findIndex(l => l.id === id);
+    if (fromIdx === -1 || n < 2) return;
+
+    // Calculate destination index
+    let toIdx;
+    if      (direction === 'up')     toIdx = fromIdx - 1;
+    else if (direction === 'down')   toIdx = fromIdx + 1;
+    else if (direction === 'top')    toIdx = 0;
+    else if (direction === 'bottom') toIdx = n - 1;
+    else return;
+
+    toIdx = Math.max(0, Math.min(n - 1, toIdx));
+    if (toIdx === fromIdx) return;
+
+    // Splice out the item and re-insert at the target — same proven pattern as handleDrop
+    const next = [...display];
+    const [item] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, item);
+
+    onReorderLayers?.(next.map(l => l.id));
+  };
+
+  // ── Flatten to Group ──────────────────────────────────
+  const handleFlatten = (layerId) => {
+    // Use selectedIds if 2+ layers selected, otherwise no-op
+    const ids = selectedIds.size >= 2 ? [...selectedIds] : null;
+    if (!ids) return;
+    onFlattenLayers?.(ids);
+    setSelectedIds(new Set());
+  };
 
   return (
     <div
@@ -864,7 +990,20 @@ export default function LayerPanel({
           >
             <span style={{ fontSize: 15, lineHeight: 1 }}>⊙</span>
             <span>Layers</span>
-            {totalLayers > 0 && (
+            {selectedIds.size >= 2 && (
+              <span style={{
+                background: 'rgba(139,92,246,0.3)',
+                color: '#c4b5fd',
+                borderRadius: 10,
+                padding: '1px 7px',
+                fontSize: 10,
+                fontWeight: 700,
+                marginLeft: 0,
+              }}>
+                {selectedIds.size} selected
+              </span>
+            )}
+            {totalLayers > 0 && selectedIds.size < 2 && (
               <span style={{
                 background: 'rgba(99,102,241,0.35)',
                 color: '#a5b4fc',
@@ -925,7 +1064,8 @@ export default function LayerPanel({
                   key={layer.id}
                   layer={layer}
                   isActive={layer.id === activeLayerId}
-                  onSelect={() => onSelectLayer(layer.id)}
+                  isSelected={selectedIds.has(layer.id) && layer.id !== activeLayerId}
+                  onSelect={(e) => handleSelectRow(layer.id, e)}
                   onToggleVisibility={() => onToggleVisibility(layer.id)}
                   onToggleLock={() => onToggleLock(layer.id)}
                   onDelete={() => onDeleteLayer(layer.id)}
@@ -936,6 +1076,12 @@ export default function LayerPanel({
                   onDragOver={handleDragOver}
                   onDragEnd={handleDragEnd}
                   onDrop={handleDrop}
+                  onMoveUp={() => handleMoveLayer(layer.id, 'up')}
+                  onMoveDown={() => handleMoveLayer(layer.id, 'down')}
+                  onMoveToTop={() => handleMoveLayer(layer.id, 'top')}
+                  onMoveToBottom={() => handleMoveLayer(layer.id, 'bottom')}
+                  onFlatten={() => handleFlatten(layer.id)}
+                  canFlatten={selectedIds.size >= 2}
                 />
               ))}
             </div>
