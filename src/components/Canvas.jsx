@@ -2131,8 +2131,10 @@ export default function Canvas({
     }
 
     const activeObj = canvas.getActiveObject();
-    // Prefer the directly hit object; fall back to whatever is already selected
-    const obj = target || activeObj;
+    // Use ONLY the directly hit object to decide context type.
+    // Never fall back to activeObj — so right-clicking empty canvas always
+    // shows the canvas menu, even if an object is currently selected.
+    const obj = target;
 
     let contextType = 'canvas';
     if (obj && !obj.isGuide && !obj.isCenterGuide && !obj.__isBlankLayer) {
@@ -2148,7 +2150,7 @@ export default function Canvas({
         // For other types (path, rect, etc.) still show the image menu as a generic fallback
         contextType = 'image';
       }
-      // Select the right-clicked object
+      // Select the right-clicked object if it isn't already active
       if (obj !== activeObj) {
         canvas.setActiveObject(obj);
         canvas.requestRenderAll();
@@ -2414,7 +2416,49 @@ export default function Canvas({
     input.click();
   }, [addImage]);
 
+  // ── Image Info modal ──────────────────────────────────
+  const [imgInfoModal, setImgInfoModal] = useState(null); // null | { natW, natH, canW, canH, format, sizeKB }
+
+  const ctxImageInfo = useCallback(() => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    const active = canvas.getActiveObject();
+    if (!active) return;
+
+    // Natural (source) dimensions
+    const el = active._element || (active.getElement?.());
+    const natW = el?.naturalWidth || el?.width || 0;
+    const natH = el?.naturalHeight || el?.height || 0;
+
+    // Canvas-rendered dimensions (with scale applied)
+    const canW = Math.round(active.getScaledWidth());
+    const canH = Math.round(active.getScaledHeight());
+
+    // Format — detect from data URL src
+    let format = 'Unknown';
+    const src = el?.src || el?.currentSrc || '';
+    if (src.startsWith('data:')) {
+      const mime = src.split(';')[0].replace('data:', '');
+      const ext = mime.split('/')[1];
+      format = ext ? ext.toUpperCase().replace('JPEG', 'JPG') : 'Unknown';
+    } else if (src) {
+      const ext = src.split('?')[0].split('.').pop()?.toUpperCase();
+      format = ext || 'Unknown';
+    }
+
+    // Estimated file size from base64 data URL
+    let sizeKB = null;
+    if (src.startsWith('data:')) {
+      const base64 = src.split(',')[1] || '';
+      const bytes = Math.round(base64.length * 0.75);
+      sizeKB = (bytes / 1024).toFixed(1);
+    }
+
+    setImgInfoModal({ natW, natH, canW, canH, format, sizeKB });
+  }, []);
+
   // ── Custom size modal (triggered from context menu) ────────────
+
   const [ctxCustomSize, setCtxCustomSize] = useState(false);
   const [ctxCustomW, setCtxCustomW] = useState(String(DEFAULT_W));
   const [ctxCustomH, setCtxCustomH] = useState(String(DEFAULT_H));
@@ -2617,6 +2661,44 @@ export default function Canvas({
   useEffect(() => {
     if (canvasResizeRef) canvasResizeRef.current = resizeCanvas;
   }, [canvasResizeRef, resizeCanvas]);
+
+  // Fit canvas to selected image dimensions (must be after resizeCanvas is defined)
+  const ctxFitCanvasToImage = useCallback(() => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    const active = canvas.getActiveObject();
+    if (!active) return;
+
+    // Use the SOURCE (natural) pixel dimensions — not the scaled display size.
+    // e.g. a 2000×2000 image scaled down to 480×480 on canvas should produce
+    // a 2000×2000 canvas, not a 480×480 one.
+    const el = active._element || (active.getElement?.());
+    const natW = el?.naturalWidth || el?.width;
+    const natH = el?.naturalHeight || el?.height;
+    if (!natW || !natH) return;
+
+    // Clamp to canvas limits
+    const newW = Math.max(MIN_W, Math.min(MAX_W, natW));
+    const newH = Math.max(MIN_H, Math.min(MAX_H, natH));
+
+    // Resize canvas DIRECTLY (bypass resizeCanvas to avoid scaleObjectsToNewSize)
+    canvas.setDimensions({ width: newW, height: newH });
+
+    // Reset image scale to 1:1 and pin to top-left so it fills the canvas exactly
+    active.set({
+      left: 0, top: 0,
+      originX: 'left', originY: 'top',
+      scaleX: 1, scaleY: 1,
+    });
+    active.setCoords();
+    canvas.renderAll();
+
+    // Keep React state and size ref in sync
+    canvasSizeRef.current = { w: newW, h: newH };
+    setCanvasSize({ w: newW, h: newH });
+
+    saveHistory();
+  }, [saveHistory]);
 
   // ── Canvas Resize Handles ─────────────────────────────
   const handleResizeMouseDown = useCallback((e, corner) => {
@@ -2846,6 +2928,14 @@ export default function Canvas({
         onUploadImage={ctxUploadImage}
         onResizeCanvas={resizeCanvas}
         showCustomSizeModal={() => showCustomSizeModalRef.current?.()}
+        onFitCanvasToImage={ctxFitCanvasToImage}
+        selectedIsImage={
+          selectedObj != null &&
+          (selectedObj.type === 'image' ||
+           selectedObj.type === 'FabricImage' ||
+           selectedObj.constructor?.name === 'FabricImage')
+        }
+        onImageInfo={ctxImageInfo}
       />
 
       {/* Hidden file input for Replace Image */}
@@ -2856,6 +2946,126 @@ export default function Canvas({
         style={{ display: 'none' }}
         onChange={handleReplaceImageFile}
       />
+
+      {/* Image Info modal */}
+      {imgInfoModal && (
+        <div
+          onClick={() => setImgInfoModal(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000003,
+            background: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(145deg, rgba(30,30,48,0.98), rgba(18,18,32,0.98))',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 16,
+              padding: '24px 28px',
+              minWidth: 300,
+              boxShadow: '0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)',
+              display: 'flex', flexDirection: 'column', gap: 20,
+              fontFamily: 'Inter, system-ui, sans-serif',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8,
+                  background: 'rgba(139,92,246,0.18)',
+                  border: '1px solid rgba(139,92,246,0.3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="16" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                  </svg>
+                </div>
+                <span style={{ fontSize: 15, fontWeight: 600, color: '#fff', letterSpacing: '-0.01em' }}>Image Info</span>
+              </div>
+              <button
+                onClick={() => setImgInfoModal(null)}
+                style={{
+                  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: 6, color: 'rgba(255,255,255,0.5)', fontSize: 16,
+                  cursor: 'pointer', width: 28, height: 28, display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0,
+                }}
+              >×</button>
+            </div>
+
+            {/* Format badge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{
+                fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+                color: '#a78bfa', textTransform: 'uppercase',
+                background: 'rgba(139,92,246,0.14)',
+                border: '1px solid rgba(139,92,246,0.25)',
+                padding: '3px 10px', borderRadius: 20,
+              }}>{imgInfoModal.format}</span>
+            </div>
+
+            {/* Info rows */}
+            {[
+              {
+                label: 'Original Size',
+                icon: '🖼️',
+                value: imgInfoModal.natW && imgInfoModal.natH
+                  ? `${imgInfoModal.natW} × ${imgInfoModal.natH} px`
+                  : '—',
+              },
+              {
+                label: 'Canvas Size',
+                icon: '📐',
+                value: `${imgInfoModal.canW} × ${imgInfoModal.canH} px`,
+              },
+              ...(imgInfoModal.sizeKB !== null ? [{
+                label: 'File Size',
+                icon: '💾',
+                value: imgInfoModal.sizeKB >= 1024
+                  ? `${(imgInfoModal.sizeKB / 1024).toFixed(2)} MB`
+                  : `${imgInfoModal.sizeKB} KB`,
+              }] : []),
+            ].map(({ label, icon, value }) => (
+              <div key={label} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '10px 14px', borderRadius: 10,
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.06)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 15 }}>{icon}</span>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 500, letterSpacing: '0.02em' }}>{label}</span>
+                </div>
+                <span style={{ fontSize: 13, color: '#fff', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+              </div>
+            ))}
+
+            {/* Close button */}
+            <button
+              onClick={() => setImgInfoModal(null)}
+              style={{
+                marginTop: 2,
+                background: 'rgba(139,92,246,0.16)',
+                border: '1px solid rgba(139,92,246,0.3)',
+                borderRadius: 10, color: '#c4b5fd',
+                fontSize: 13, fontWeight: 600,
+                cursor: 'pointer', padding: '9px 0',
+                fontFamily: 'Inter, system-ui, sans-serif',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.28)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(139,92,246,0.16)'}
+            >Close</button>
+          </div>
+        </div>
+      )}
 
       {/* Custom size modal (from context menu) */}
       {ctxCustomSize && (

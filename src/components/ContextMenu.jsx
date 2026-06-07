@@ -44,6 +44,8 @@ const IC = {
   replace:   'M1 4v6h6M23 20v-6h-6M20.49 9A9 9 0 0 0 5.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 0 1 3.51 15',
   flipH:     'M12 3v18M3 8h5v8H3zM16 8h5v8h-5z',
   flipV:     'M3 12h18M8 3h8v5H8zM8 16h8v5H8z',
+  fitCanvas: 'M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3',
+  info:      'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 16v-4M12 8h.01',
 };
 
 // ── Exact LayerPanel divider style ────────────────────────────────────────────
@@ -154,6 +156,8 @@ export default function ContextMenu({
   onEditText, onToggleLock, onRenameLayer, onAlign,
   onReplaceImage, onFlipH, onFlipV,
   isLocked, hasClipboard, showCustomSizeModal,
+  onFitCanvasToImage, selectedIsImage,
+  onImageInfo,
 }) {
   const menuRef = useRef(null);
   const [activeSubmenu, setActiveSubmenu] = useState(null);
@@ -217,6 +221,10 @@ export default function ContextMenu({
   // ── Canvas menu ─────────────────────────────────────────────────────────────
   const renderCanvas = () => (
     <>
+      <Item icon={IC.paste}  label="Paste"        disabled={!hasClipboard} onClick={() => run(onPaste)} />
+      <Item icon={IC.text}   label="Add Text"      onClick={() => run(onAddText)} />
+      <Item icon={IC.upload} label="Upload Image"  onClick={() => run(onUploadImage)} />
+      <Divider />
       <Item
         icon={IC.canvas} label="Canvas Size" hasSubmenu
         isActive={activeSubmenu === 'canvasSize'}
@@ -236,10 +244,12 @@ export default function ContextMenu({
           </div>
         </Submenu>
       )}
-      <Divider />
-      <Item icon={IC.paste}  label="Paste"        disabled={!hasClipboard} onClick={() => run(onPaste)} />
-      <Item icon={IC.text}   label="Add Text"      onClick={() => run(onAddText)} />
-      <Item icon={IC.upload} label="Upload Image"  onClick={() => run(onUploadImage)} />
+      <Item
+        icon={IC.fitCanvas}
+        label="Fit Canvas to Image"
+        disabled={!selectedIsImage}
+        onClick={() => run(onFitCanvasToImage)}
+      />
     </>
   );
 
@@ -287,6 +297,8 @@ export default function ContextMenu({
   // ── Image menu ──────────────────────────────────────────────────────────────
   const renderImage = () => (
     <>
+      <Item icon={IC.info} label="Image Info" onClick={() => run(onImageInfo)} />
+      <Divider />
       <Item icon={IC.copy}      label="Copy"           onClick={() => run(onCopy)} />
       <Item icon={IC.paste}     label="Paste"          disabled={!hasClipboard} onClick={() => run(onPaste)} />
       <Item icon={IC.duplicate} label="Duplicate"      onClick={() => run(onDuplicate)} />
