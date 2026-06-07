@@ -482,19 +482,30 @@ function LayerRow({
   return (
     <div
       style={{ position: 'relative', paddingBottom: 4 }}
-      onDragEnter={(e) => e.preventDefault()}
-      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; onDragOver?.(layer.id, e); }}
-      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDrop?.(layer.id); }}
+      onDragEnter={(e) => { e.preventDefault(); onDragOver?.(layer.id, e); }}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); onDragOver?.(layer.id, e); }}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDrop?.(layer.id, e); }}
       onContextMenu={handleContextMenu}
     >
       {/* Drop indicator ABOVE */}
       {dropIndicator === 'before' && (
         <div style={{
-          position: 'absolute', top: -1, left: 4, right: 4, height: 2, borderRadius: 2,
-          background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
-          boxShadow: '0 0 6px rgba(99,102,241,0.7)',
-          zIndex: 10, pointerEvents: 'none'
-        }} />
+          position: 'absolute', top: 0, left: 4, right: 4,
+          height: 4, borderRadius: 4,
+          background: '#a78bfa',
+          boxShadow: '0 0 10px rgba(167,139,250,0.9), 0 0 20px rgba(167,139,250,0.4)',
+          zIndex: 10, pointerEvents: 'none',
+        }}>
+          {/* Left arrow pointer ◀ */}
+          <div style={{
+            position: 'absolute',
+            left: -2, top: '50%', transform: 'translateY(-50%)',
+            width: 0, height: 0,
+            borderTop: '5px solid transparent',
+            borderBottom: '5px solid transparent',
+            borderRight: '6px solid #a78bfa',
+          }} />
+        </div>
       )}
 
       <div
@@ -523,7 +534,7 @@ function LayerRow({
           e.dataTransfer.setDragImage(ghost, 15, 15);
           setTimeout(() => document.body.removeChild(ghost), 0);
 
-          onDragStart?.(layer.id);
+          onDragStart?.(layer.id, e);
         }}
         onDragEnd={() => onDragEnd?.()}
         onContextMenu={handleContextMenu}
@@ -543,7 +554,7 @@ function LayerRow({
             : hovered
               ? 'rgba(255,255,255,0.09)'
               : 'rgba(22,22,40,0.85)',
-          opacity: isDragging ? 0.35 : 1,
+          opacity: isDragging ? 0.4 : 1,
           transition: 'background 0.15s, border-color 0.15s, opacity 0.15s',
           overflow: 'hidden',
           position: 'relative',
@@ -648,11 +659,22 @@ function LayerRow({
       {/* Drop indicator BELOW */}
       {dropIndicator === 'after' && (
         <div style={{
-          position: 'absolute', bottom: 3, left: 4, right: 4, height: 2, borderRadius: 2,
-          background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
-          boxShadow: '0 0 6px rgba(99,102,241,0.7)',
-          zIndex: 10, pointerEvents: 'none'
-        }} />
+          position: 'absolute', bottom: 0, left: 4, right: 4,
+          height: 4, borderRadius: 4,
+          background: '#a78bfa',
+          boxShadow: '0 0 10px rgba(167,139,250,0.9), 0 0 20px rgba(167,139,250,0.4)',
+          zIndex: 10, pointerEvents: 'none',
+        }}>
+          {/* Left arrow pointer ◀ */}
+          <div style={{
+            position: 'absolute',
+            left: -2, top: '50%', transform: 'translateY(-50%)',
+            width: 0, height: 0,
+            borderTop: '5px solid transparent',
+            borderBottom: '5px solid transparent',
+            borderRight: '6px solid #a78bfa',
+          }} />
+        </div>
       )}
 
       {/* Hover popup */}
@@ -739,24 +761,38 @@ export default function LayerPanel({
   const displayLayers = [...layers].reverse();
   const totalLayers = layers.length;
 
-  const handleDragStart = (id) => setDragId(id);
+  const handleDragStart = (id, e) => {
+    setDragId(id);
+    // Store the dragged id in dataTransfer so drop is reliable even if state
+    // hasn't flushed yet (fixes the snap-back race condition)
+    e.dataTransfer.setData('text/plain', String(id));
+    e.dataTransfer.effectAllowed = 'move';
+  };
 
   const handleDragOver = (id, e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
     if (id === dragId) return;
+    // Use e.currentTarget (the full outer wrapper row) for reliable hit area
     const rect = e.currentTarget.getBoundingClientRect();
     setDragOverId(id);
     setDropPos(e.clientY < rect.top + rect.height / 2 ? 'before' : 'after');
   };
 
-  const handleDrop = (targetId) => {
-    if (!dragId || dragId === targetId) { handleDragEnd(); return; }
-    const fromIdx = displayLayers.findIndex(l => l.id === dragId);
-    const toIdx = displayLayers.findIndex(l => l.id === targetId);
+  const handleDrop = (targetId, e) => {
+    e.preventDefault();
+    // Read from dataTransfer as the ground truth (state may be stale on fast drags)
+    const transferredId = e.dataTransfer.getData('text/plain');
+    const activeDragId = transferredId || dragId;
+    if (!activeDragId || activeDragId === targetId) { handleDragEnd(); return; }
+    const fromIdx = displayLayers.findIndex(l => String(l.id) === String(activeDragId));
+    const toIdx   = displayLayers.findIndex(l => l.id === targetId);
     if (fromIdx === -1 || toIdx === -1) { handleDragEnd(); return; }
-    const newDisplay = displayLayers.filter(l => l.id !== dragId);
+    const newDisplay = displayLayers.filter(l => String(l.id) !== String(activeDragId));
     let insertAt = newDisplay.findIndex(l => l.id === targetId);
     if (dropPos === 'after') insertAt += 1;
     newDisplay.splice(insertAt, 0, displayLayers[fromIdx]);
+    // Update state immediately before any async re-render
     onReorderLayers?.(newDisplay.map(l => l.id));
     handleDragEnd();
   };
