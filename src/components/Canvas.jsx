@@ -301,6 +301,9 @@ export default function Canvas({
   const showCustomSizeModalRef = useRef(null);
   // Flag: is the right-clicked object locked?
   const [ctxIsLocked, setCtxIsLocked] = useState(false);
+  // Flag: is there a selected IMAGE at the time of the right-click? (used to
+  // enable/disable "Fit Canvas to Image" in the canvas background menu)
+  const [ctxSelectedIsImage, setCtxSelectedIsImage] = useState(false);
   // Stable ref so the init useEffect can always call the latest handleContextMenu
   // without needing to re-subscribe every time zoom changes.
   const handleContextMenuRef = useRef(null);
@@ -2161,6 +2164,17 @@ export default function Canvas({
       setCtxIsLocked(false);
     }
 
+    // Capture whether a Fabric image is currently selected RIGHT NOW —
+    // read directly from canvas so we never use stale React state.
+    const liveActive = canvas.getActiveObject();
+    setCtxSelectedIsImage(
+      !!liveActive &&
+      !liveActive.isGuide && !liveActive.isCenterGuide && !liveActive.__isBlankLayer &&
+      (liveActive.type === 'image' ||
+       liveActive.type === 'FabricImage' ||
+       liveActive.constructor?.name === 'FabricImage')
+    );
+
     setCtxMenu({
       visible: true,
       x: e.clientX,
@@ -2929,12 +2943,7 @@ export default function Canvas({
         onResizeCanvas={resizeCanvas}
         showCustomSizeModal={() => showCustomSizeModalRef.current?.()}
         onFitCanvasToImage={ctxFitCanvasToImage}
-        selectedIsImage={
-          selectedObj != null &&
-          (selectedObj.type === 'image' ||
-           selectedObj.type === 'FabricImage' ||
-           selectedObj.constructor?.name === 'FabricImage')
-        }
+        selectedIsImage={ctxSelectedIsImage}
         onImageInfo={ctxImageInfo}
       />
 
@@ -2947,125 +2956,172 @@ export default function Canvas({
         onChange={handleReplaceImageFile}
       />
 
-      {/* Image Info modal */}
-      {imgInfoModal && (
-        <div
-          onClick={() => setImgInfoModal(null)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1000003,
-            background: 'rgba(0,0,0,0.6)',
-            backdropFilter: 'blur(6px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: 'linear-gradient(145deg, rgba(30,30,48,0.98), rgba(18,18,32,0.98))',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 16,
-              padding: '24px 28px',
-              minWidth: 300,
-              boxShadow: '0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)',
-              display: 'flex', flexDirection: 'column', gap: 20,
-              fontFamily: 'Inter, system-ui, sans-serif',
-            }}
-          >
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{
-                  width: 32, height: 32, borderRadius: 8,
-                  background: 'rgba(139,92,246,0.18)',
-                  border: '1px solid rgba(139,92,246,0.3)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                    stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="12" y1="16" x2="12" y2="12"/>
-                    <line x1="12" y1="8" x2="12.01" y2="8"/>
-                  </svg>
-                </div>
-                <span style={{ fontSize: 15, fontWeight: 600, color: '#fff', letterSpacing: '-0.01em' }}>Image Info</span>
-              </div>
-              <button
-                onClick={() => setImgInfoModal(null)}
-                style={{
-                  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: 6, color: 'rgba(255,255,255,0.5)', fontSize: 16,
-                  cursor: 'pointer', width: 28, height: 28, display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0,
-                }}
-              >×</button>
-            </div>
-
-            {/* Format badge */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{
-                fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
-                color: '#a78bfa', textTransform: 'uppercase',
-                background: 'rgba(139,92,246,0.14)',
-                border: '1px solid rgba(139,92,246,0.25)',
-                padding: '3px 10px', borderRadius: 20,
-              }}>{imgInfoModal.format}</span>
-            </div>
-
-            {/* Info rows */}
-            {[
-              {
-                label: 'Original Size',
-                icon: '🖼️',
-                value: imgInfoModal.natW && imgInfoModal.natH
-                  ? `${imgInfoModal.natW} × ${imgInfoModal.natH} px`
-                  : '—',
-              },
-              {
-                label: 'Canvas Size',
-                icon: '📐',
-                value: `${imgInfoModal.canW} × ${imgInfoModal.canH} px`,
-              },
-              ...(imgInfoModal.sizeKB !== null ? [{
-                label: 'File Size',
-                icon: '💾',
-                value: imgInfoModal.sizeKB >= 1024
-                  ? `${(imgInfoModal.sizeKB / 1024).toFixed(2)} MB`
-                  : `${imgInfoModal.sizeKB} KB`,
-              }] : []),
-            ].map(({ label, icon, value }) => (
-              <div key={label} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '10px 14px', borderRadius: 10,
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.06)',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 15 }}>{icon}</span>
-                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 500, letterSpacing: '0.02em' }}>{label}</span>
-                </div>
-                <span style={{ fontSize: 13, color: '#fff', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-              </div>
-            ))}
-
-            {/* Close button */}
-            <button
+      {/* Image Info modal — macOS style */}
+      {imgInfoModal && (() => {
+        // Lucide-style SVG icons rendered inline (no extra import needed)
+        const IconImage = () => (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+        );
+        const IconHardDrive = () => (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="22" y1="12" x2="2" y2="12"/>
+            <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+            <line x1="6" y1="16" x2="6.01" y2="16"/>
+            <line x1="10" y1="16" x2="10.01" y2="16"/>
+          </svg>
+        );
+        const rows = [
+          {
+            icon: <IconImage />,
+            label: 'Original Size',
+            value: imgInfoModal.natW && imgInfoModal.natH
+              ? `${imgInfoModal.natW} × ${imgInfoModal.natH} px`
+              : '—',
+          },
+          ...(imgInfoModal.sizeKB !== null ? [{
+            icon: <IconHardDrive />,
+            label: 'File Size',
+            value: Number(imgInfoModal.sizeKB) >= 1024
+              ? `${(imgInfoModal.sizeKB / 1024).toFixed(2)} MB`
+              : `${imgInfoModal.sizeKB} KB`,
+          }] : []),
+        ];
+        return (
+          <>
+            <style>{`
+              @keyframes imgInfoIn {
+                from { opacity: 0; transform: scale(0.94); }
+                to   { opacity: 1; transform: scale(1); }
+              }
+            `}</style>
+            <div
               onClick={() => setImgInfoModal(null)}
               style={{
-                marginTop: 2,
-                background: 'rgba(139,92,246,0.16)',
-                border: '1px solid rgba(139,92,246,0.3)',
-                borderRadius: 10, color: '#c4b5fd',
-                fontSize: 13, fontWeight: 600,
-                cursor: 'pointer', padding: '9px 0',
-                fontFamily: 'Inter, system-ui, sans-serif',
-                transition: 'background 0.15s',
+                position: 'fixed', inset: 0, zIndex: 1000003,
+                background: 'rgba(0,0,0,0.45)',
+                backdropFilter: 'blur(8px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.28)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(139,92,246,0.16)'}
-            >Close</button>
-          </div>
-        </div>
-      )}
+            >
+              <div
+                onClick={e => e.stopPropagation()}
+                style={{
+                  width: 320,
+                  background: 'rgba(28,28,32,0.96)',
+                  backdropFilter: 'blur(20px) saturate(180%)',
+                  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: 14,
+                  padding: 20,
+                  boxShadow: '0 24px 48px rgba(0,0,0,0.6), 0 0 0 0.5px rgba(255,255,255,0.06)',
+                  display: 'flex', flexDirection: 'column', gap: 14,
+                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif',
+                  animation: 'imgInfoIn 180ms ease-out',
+                }}
+              >
+                {/* ── Header ── */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                    {/* SF-style icon tile */}
+                    <div style={{
+                      width: 28, height: 28, borderRadius: 10,
+                      background: 'rgba(139,92,246,0.2)',
+                      border: '1px solid rgba(139,92,246,0.3)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <span style={{ color: '#a78bfa', fontSize: 14, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em' }}>ℹ</span>
+                    </div>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: '#f5f5f7', letterSpacing: '-0.01em' }}>Image Info</span>
+                  </div>
+                  {/* Close × */}
+                  <button
+                    onClick={() => setImgInfoModal(null)}
+                    style={{
+                      width: 24, height: 24, borderRadius: '50%',
+                      background: 'rgba(255,255,255,0.06)', border: 'none',
+                      color: '#888', fontSize: 15, lineHeight: 1,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center',
+                      justifyContent: 'center', padding: 0, flexShrink: 0,
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+                  >×</button>
+                </div>
+
+                {/* ── Format pill ── */}
+                <div>
+                  <span style={{
+                    display: 'inline-block',
+                    fontSize: 11, fontWeight: 600, letterSpacing: '0.05em',
+                    textTransform: 'uppercase', color: '#a78bfa',
+                    background: 'rgba(139,92,246,0.15)',
+                    border: '1px solid rgba(139,92,246,0.25)',
+                    padding: '3px 9px', borderRadius: 20,
+                  }}>{imgInfoModal.format}</span>
+                </div>
+
+                {/* ── Info rows — single container, borderless list ── */}
+                <div style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: 10, overflow: 'hidden',
+                }}>
+                  {rows.map(({ icon, label, value }, i) => (
+                    <div
+                      key={label}
+                      style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '10px 14px',
+                        borderBottom: i < rows.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{
+                          width: 24, height: 24, borderRadius: 6,
+                          background: 'rgba(139,92,246,0.15)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>{icon}</div>
+                        <span style={{ fontSize: 13, color: '#888', fontWeight: 400 }}>{label}</span>
+                      </div>
+                      <span style={{
+                        fontSize: 13, color: '#f5f5f7', fontWeight: 500,
+                        fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em',
+                      }}>{value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Close button ── */}
+                <button
+                  onClick={() => setImgInfoModal(null)}
+                  style={{
+                    height: 36, borderRadius: 8,
+                    background: 'rgba(139,92,246,0.15)',
+                    border: '1px solid rgba(139,92,246,0.25)',
+                    color: '#a78bfa', fontSize: 14, fontWeight: 600,
+                    cursor: 'pointer', width: '100%',
+                    fontFamily: 'Inter, -apple-system, system-ui, sans-serif',
+                    transition: 'background 0.15s',
+                    letterSpacing: '-0.01em',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.25)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(139,92,246,0.15)'}
+                >Close</button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
 
       {/* Custom size modal (from context menu) */}
       {ctxCustomSize && (
