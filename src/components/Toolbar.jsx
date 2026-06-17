@@ -160,6 +160,24 @@ function CanvasSizeButton({ canvasResizeRef }) {
     }
   };
 
+  const isCustomSize = !CANVAS_PRESETS.some(p => p.w === size.w && p.h === size.h);
+
+  const isActivePreset = (p) => p.w === size.w && p.h === size.h;
+
+  const renderPresetItem = (p) => {
+    const active = isActivePreset(p);
+    return (
+      <div
+        key={p.label}
+        className={`cs-item${active ? ' cs-item-active' : ''}`}
+        onClick={() => applySize(p.w, p.h)}
+      >
+        <span>{p.label}</span>
+        <span className="cs-tag">{p.tag}</span>
+      </div>
+    );
+  };
+
   return (
     <>
       <div ref={wrapperRef} style={{ position: 'relative' }}>
@@ -229,22 +247,37 @@ function CanvasSizeButton({ canvasResizeRef }) {
                 color: #fff;
                 font-family: Inter, system-ui, sans-serif;
               }
-              .cs-item:hover { background: rgba(255,255,255,0.08); }
+              .cs-item:hover:not(.cs-item-active) { background: rgba(255,255,255,0.08); }
+              .cs-item-active {
+                background: #9333ea;
+                color: #fff;
+              }
+              .cs-item-active:hover { background: #6d28d9; }
+              .cs-tag {
+                font-size: 10px;
+                font-family: monospace;
+                background: rgba(124,58,237,0.2);
+                color: #c4b5fd;
+                border-radius: 4px;
+                padding: 1px 6px;
+              }
+              .cs-item-active .cs-tag {
+                background: rgba(255,255,255,0.22);
+                color: #fff;
+              }
             `}</style>
-            {CANVAS_PRESETS.map(p => (
-              <div key={p.label} className="cs-item" onClick={() => applySize(p.w, p.h)}>
-                <span>{p.label}</span>
-                <span style={{
-                  fontSize: 10,
-                  fontFamily: 'monospace',
-                  background: 'rgba(124,58,237,0.2)',
-                  color: '#c4b5fd',
-                  borderRadius: 4,
-                  padding: '1px 6px',
-                }}>{p.tag}</span>
-              </div>
-            ))}
+
+            {CANVAS_PRESETS.map(p => renderPresetItem(p))}
             <div style={{ height: 1, background: 'rgba(255,255,255,0.07)', margin: '4px 12px' }} />
+            {isCustomSize && (
+              <div
+                className="cs-item cs-item-active"
+                onClick={() => { setOpen(false); setShowCustom(true); }}
+              >
+                <span>{size.w}×{size.h}</span>
+                <span className="cs-tag">Custom</span>
+              </div>
+            )}
             <div
               className="cs-item"
               onClick={() => { setOpen(false); setShowCustom(true); }}

@@ -53,6 +53,14 @@ function Divider() {
   return <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', margin: '4px 0' }} />;
 }
 
+function MenuHeader({ label }) {
+  return (
+    <div className="w-full pt-1 pb-1 mb-1 text-center text-xs uppercase tracking-widest text-gray-500 border-b border-white/10">
+      {label}
+    </div>
+  );
+}
+
 // ── Exact LayerPanel menu item style (.mac-context-item) ──────────────────────
 // height: 32px; margin: 0 4px; padding: 0 12px; border-radius: 8px;
 // color: #ffffff; font-size: 13px; font-weight: 400; letter-spacing: 0.01em;
@@ -221,6 +229,7 @@ export default function ContextMenu({
   // ── Canvas menu ─────────────────────────────────────────────────────────────
   const renderCanvas = () => (
     <>
+      <MenuHeader label="Canvas" />
       <Item icon={IC.paste}  label="Paste"        disabled={!hasClipboard} onClick={() => run(onPaste)} />
       <Item icon={IC.text}   label="Add Text"      onClick={() => run(onAddText)} />
       <Item icon={IC.upload} label="Upload Image"  onClick={() => run(onUploadImage)} />
@@ -271,6 +280,7 @@ export default function ContextMenu({
   // ── Text menu ───────────────────────────────────────────────────────────────
   const renderText = () => (
     <>
+      <MenuHeader label="Object" />
       <Item icon={IC.copy}      label="Copy"           onClick={() => run(onCopy)} />
       <Item icon={IC.paste}     label="Paste"          disabled={!hasClipboard} onClick={() => run(onPaste)} />
       <Item icon={IC.duplicate} label="Duplicate"      onClick={() => run(onDuplicate)} />
@@ -297,6 +307,7 @@ export default function ContextMenu({
   // ── Image menu ──────────────────────────────────────────────────────────────
   const renderImage = () => (
     <>
+      <MenuHeader label="Object" />
       <Item icon={IC.info} label="Image Info" onClick={() => run(onImageInfo)} />
       <Divider />
       <Item icon={IC.copy}      label="Copy"           onClick={() => run(onCopy)} />

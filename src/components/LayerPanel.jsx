@@ -361,6 +361,9 @@ function LayerContextMenu({
         onMouseDown={e => e.stopPropagation()}
         onClick={e => e.stopPropagation()}
       >
+        <div className="w-full pt-1 pb-1 mb-1 text-center text-xs uppercase tracking-widest text-gray-500 border-b border-white/10">
+          Layer
+        </div>
         <div className="lp-ctx-item" onClick={() => run(onRefresh)}>
           <RefreshCw size={14} style={{ opacity: 0.7, flexShrink: 0 }} /> Refresh Thumbnail
         </div>
