@@ -18,155 +18,161 @@ import ContextMenu from './ContextMenu';
 //   default    → Arrow     (empty canvas)
 // No custom SVG needed — browser renders native OS shapes.
 
+// ── Module-level zoom scale tracker ─────────────────────────────────────────
+// Kept outside React so custom render functions (module-level) can always read
+// the latest value without prop-threading. Updated by updateControlsForZoom().
+let _controlZoomScale = 1; // 1/zoom — multiply base sizes by this to compensate CSS scale
+
+// Base (target on-screen) sizes — these are what the user sees at 100% zoom:
+const BASE_CORNER_SIZE   = 10;  // px on screen (corner square side length)
+const BASE_EDGE_SIZE     = 7;   // px on screen (edge midpoint square)
+const BASE_ROTATE_SIZE   = 12;  // px on screen (rotate circle diameter)
+const BASE_BORDER_SCALE  = 1.5; // border width at 100%
+const BASE_PADDING       = 4;   // padding at 100%
+
 // ── Apply fabric v7 global selection style defaults ───────────────────────────
 if (fabric.InteractiveFabricObject) {
   Object.assign(fabric.InteractiveFabricObject.ownDefaults, {
-    borderColor: 'rgba(107, 95, 228, 0.85)',       // #6B5FE4 Figma/Linear style
+    borderColor: '#7C3AED',               // brand purple
     borderDashArray: null,
     cornerColor: '#ffffff',
-    cornerStrokeColor: 'rgba(107, 95, 228, 0.85)',
-    cornerStyle: 'rect',
-    cornerSize: 8,
-    borderScaleFactor: 1.5,
+    cornerStrokeColor: '#7C3AED',
+    cornerStyle: 'rect',                  // rect — we handle drawing ourselves
+    cornerSize: BASE_CORNER_SIZE,
+    borderScaleFactor: BASE_BORDER_SCALE,
     transparentCorners: false,
     borderOpacity: 1,
-    padding: 0,                   // crisp padding
+    padding: BASE_PADDING,
   });
 } else {
-  fabric.Object.prototype.borderColor = 'rgba(107, 95, 228, 0.85)';
+  fabric.Object.prototype.borderColor = '#7C3AED';
   fabric.Object.prototype.borderDashArray = null;
   fabric.Object.prototype.cornerColor = '#ffffff';
-  fabric.Object.prototype.cornerStrokeColor = 'rgba(107, 95, 228, 0.85)';
+  fabric.Object.prototype.cornerStrokeColor = '#7C3AED';
   fabric.Object.prototype.cornerStyle = 'rect';
-  fabric.Object.prototype.cornerSize = 8;
-  fabric.Object.prototype.borderScaleFactor = 1.5;
+  fabric.Object.prototype.cornerSize = BASE_CORNER_SIZE;
+  fabric.Object.prototype.borderScaleFactor = BASE_BORDER_SCALE;
   fabric.Object.prototype.transparentCorners = false;
   fabric.Object.prototype.borderOpacity = 1;
-  fabric.Object.prototype.padding = 0;
+  fabric.Object.prototype.padding = BASE_PADDING;
 }
 
 // Ensure default hover cursor for text is 'move' (unless editing)
 fabric.IText.prototype.hoverCursor = 'move';
 
 // ── Custom control render functions ────────────────────────────────────────────
-// Small rounded square for corner handles
+// All sizes are multiplied by _controlZoomScale (= 1/zoom) so they remain a
+// constant on-screen pixel size regardless of the CSS zoom applied to the canvas.
+
+// Corner handle — white square with rounded corners + purple border stroke
 function renderCornerSquare(key, ctx, left, top, _styleOverride, fabricObject) {
   const canvas = fabricObject.canvas;
   const isHovered = canvas && canvas._hoveredCorner === key && canvas._hoveredTarget === fabricObject;
-  const size = isHovered ? 8 * 1.2 : 8;
+  const base = BASE_CORNER_SIZE * _controlZoomScale;
+  const size = isHovered ? base * 1.2 : base;
+  const r = Math.max(1, size * 0.18); // subtle corner radius
+  const half = size / 2;
 
   ctx.save();
   ctx.translate(left, top);
-  if (fabricObject.angle) ctx.rotate(fabric.util.degreesToRadians(fabricObject.angle));
 
-  ctx.shadowColor = 'rgba(0,0,0,0.2)';
-  ctx.shadowBlur = 4;
-  ctx.shadowOffsetY = 1;
+  // Subtle drop shadow
+  ctx.shadowColor = 'rgba(0,0,0,0.22)';
+  ctx.shadowBlur = 3 * _controlZoomScale;
+  ctx.shadowOffsetY = 1 * _controlZoomScale;
 
+  // Rounded rect path
   ctx.beginPath();
-  const r = 2; // border-radius
-  const w = size, h = size;
-  const x = -w / 2, y = -h / 2;
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.moveTo(-half + r, -half);
+  ctx.lineTo(half - r, -half);
+  ctx.quadraticCurveTo(half, -half, half, -half + r);
+  ctx.lineTo(half, half - r);
+  ctx.quadraticCurveTo(half, half, half - r, half);
+  ctx.lineTo(-half + r, half);
+  ctx.quadraticCurveTo(-half, half, -half, half - r);
+  ctx.lineTo(-half, -half + r);
+  ctx.quadraticCurveTo(-half, -half, -half + r, -half);
   ctx.closePath();
 
+  // White fill
   ctx.fillStyle = '#ffffff';
   ctx.fill();
 
   ctx.shadowColor = 'transparent';
-  ctx.strokeStyle = '#6B5FE4';
-  ctx.lineWidth = 1.5;
+
+  // Purple border
+  ctx.strokeStyle = '#7C3AED';
+  ctx.lineWidth = 1.5 * _controlZoomScale;
   ctx.stroke();
 
   ctx.restore();
 }
 
-// Even smaller rounded square for edge handles
+// Edge midpoint handle — smaller white square with purple border
 function renderEdgeSquare(key, ctx, left, top, _styleOverride, fabricObject) {
   const canvas = fabricObject.canvas;
   const isHovered = canvas && canvas._hoveredCorner === key && canvas._hoveredTarget === fabricObject;
-  const size = isHovered ? 6 * 1.2 : 6;
+  const base = BASE_EDGE_SIZE * _controlZoomScale;
+  const size = isHovered ? base * 1.2 : base;
+  const r = Math.max(1, size * 0.15);
+  const half = size / 2;
 
   ctx.save();
   ctx.translate(left, top);
-  if (fabricObject.angle) ctx.rotate(fabric.util.degreesToRadians(fabricObject.angle));
 
-  ctx.shadowColor = 'rgba(0,0,0,0.15)';
-  ctx.shadowBlur = 3;
-  ctx.shadowOffsetY = 1;
+  ctx.shadowColor = 'rgba(0,0,0,0.18)';
+  ctx.shadowBlur = 2 * _controlZoomScale;
+  ctx.shadowOffsetY = 1 * _controlZoomScale;
 
   ctx.beginPath();
-  const r = 1.5;
-  const w = size, h = size;
-  const x = -w / 2, y = -h / 2;
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.moveTo(-half + r, -half);
+  ctx.lineTo(half - r, -half);
+  ctx.quadraticCurveTo(half, -half, half, -half + r);
+  ctx.lineTo(half, half - r);
+  ctx.quadraticCurveTo(half, half, half - r, half);
+  ctx.lineTo(-half + r, half);
+  ctx.quadraticCurveTo(-half, half, -half, half - r);
+  ctx.lineTo(-half, -half + r);
+  ctx.quadraticCurveTo(-half, -half, -half + r, -half);
   ctx.closePath();
 
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.fillStyle = '#ffffff';
   ctx.fill();
 
   ctx.shadowColor = 'transparent';
-  ctx.strokeStyle = 'rgba(107, 95, 228, 0.8)';
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#7C3AED';
+  ctx.lineWidth = 1.5 * _controlZoomScale;
   ctx.stroke();
 
   ctx.restore();
 }
 
-// Rotate handle — sleek curved arrow icon (↻)
+// Rotate handle — small plain circle (no icon, clean minimal look)
 function renderRotateHandle(key, ctx, left, top, _styleOverride, fabricObject) {
   const canvas = fabricObject.canvas;
   const isHovered = canvas && canvas._hoveredCorner === key && canvas._hoveredTarget === fabricObject;
-  const size = isHovered ? 18 * 1.15 : 18;
+  const base = BASE_ROTATE_SIZE * _controlZoomScale;
+  const size = isHovered ? base * 1.2 : base;
+  const radius = size / 2;
 
   ctx.save();
   ctx.translate(left, top);
-  if (fabricObject.angle) ctx.rotate(fabric.util.degreesToRadians(fabricObject.angle));
 
-  ctx.shadowColor = 'rgba(0,0,0,0.15)';
-  ctx.shadowBlur = 4;
-  ctx.shadowOffsetY = 1;
+  ctx.shadowColor = 'rgba(0,0,0,0.22)';
+  ctx.shadowBlur = 3 * _controlZoomScale;
+  ctx.shadowOffsetY = 1 * _controlZoomScale;
 
+  // White filled circle
   ctx.beginPath();
-  ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
   ctx.fillStyle = '#ffffff';
   ctx.fill();
 
   ctx.shadowColor = 'transparent';
-  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
 
-  // Curved arrow icon
-  ctx.beginPath();
-  const arcRadius = size * 0.28;
-  ctx.arc(0, 0, arcRadius, -Math.PI * 0.6, Math.PI * 0.8);
-  ctx.strokeStyle = '#333333';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  const tipX = arcRadius * Math.cos(Math.PI * 0.8);
-  const tipY = arcRadius * Math.sin(Math.PI * 0.8);
-  ctx.beginPath();
-  ctx.moveTo(tipX + 2.5, tipY - 0.5);
-  ctx.lineTo(tipX, tipY);
-  ctx.lineTo(tipX + 0.5, tipY - 3);
+  // Purple ring
+  ctx.strokeStyle = '#7C3AED';
+  ctx.lineWidth = 1.5 * _controlZoomScale;
   ctx.stroke();
 
   ctx.restore();
@@ -201,8 +207,9 @@ function applyCustomControls(obj) {
     if (obj.controls[key]) {
       const isCorner = ['tl', 'tr', 'bl', 'br'].includes(key);
       obj.controls[key].render = isCorner ? renderCornerSquare.bind(null, key) : renderEdgeSquare.bind(null, key);
-      obj.controls[key].sizeX = isCorner ? 12 : 10;
-      obj.controls[key].sizeY = isCorner ? 12 : 10;
+      // hitbox: always large enough to click regardless of zoom
+      obj.controls[key].sizeX = isCorner ? BASE_CORNER_SIZE * 1.5 : BASE_EDGE_SIZE * 1.5;
+      obj.controls[key].sizeY = isCorner ? BASE_CORNER_SIZE * 1.5 : BASE_EDGE_SIZE * 1.5;
 
       // Dynamic rotation-aware cursor
       obj.controls[key].cursorStyleHandler = (eventData, control, fabricObject) => {
@@ -224,10 +231,56 @@ function applyCustomControls(obj) {
     obj.controls['mtr'].cursorStyle = `url("data:image/svg+xml,${rotateEncoded}") 12 12, alias`;
 
     delete obj.controls['mtr'].cursorStyleHandler;
-    obj.controls['mtr'].sizeX = 18;
-    obj.controls['mtr'].sizeY = 18;
-    obj.controls['mtr'].offsetY = -22; // Push it up slightly more
+    obj.controls['mtr'].sizeX = BASE_ROTATE_SIZE * 1.5;
+    obj.controls['mtr'].sizeY = BASE_ROTATE_SIZE * 1.5;
+    obj.controls['mtr'].offsetY = -18; // Distance above top edge
   }
+}
+
+// ── Scale Fabric selection controls to compensate for CSS zoom ────────────────
+// Since zoom is applied as CSS scale() on the wrapper div (not canvas.setZoom),
+// Fabric renders at full resolution and CSS shrinks everything, including handles.
+// We counter this by multiplying sizes by (1/zoomFraction) so they stay constant
+// on screen. This updates the module-level _controlZoomScale used by render fns,
+// and also sets per-object cornerSize / borderScaleFactor / padding.
+function updateControlsForZoom(fabricCanvas, zoomPct) {
+  if (!fabricCanvas) return;
+  const z = Math.max(0.01, zoomPct / 100);   // CSS zoom fraction
+  const inv = 1 / z;                          // compensating multiplier
+
+  // Update module-level scale so render functions read it on next frame
+  _controlZoomScale = inv;
+
+  // Update every selectable object's scalar properties
+  fabricCanvas.getObjects().forEach(obj => {
+    if (!obj || obj.isGuide || obj.isCenterGuide) return;
+    obj.set({
+      cornerSize:        BASE_CORNER_SIZE  * inv,
+      borderScaleFactor: BASE_BORDER_SCALE * inv,
+      padding:           BASE_PADDING      * inv,
+    });
+    // Update control hitbox sizes to match rendered size
+    if (obj.controls) {
+      ['tl', 'tr', 'bl', 'br'].forEach(k => {
+        if (obj.controls[k]) {
+          obj.controls[k].sizeX = BASE_CORNER_SIZE * inv * 1.5;
+          obj.controls[k].sizeY = BASE_CORNER_SIZE * inv * 1.5;
+        }
+      });
+      ['mt', 'mb', 'ml', 'mr'].forEach(k => {
+        if (obj.controls[k]) {
+          obj.controls[k].sizeX = BASE_EDGE_SIZE * inv * 1.5;
+          obj.controls[k].sizeY = BASE_EDGE_SIZE * inv * 1.5;
+        }
+      });
+      if (obj.controls['mtr']) {
+        obj.controls['mtr'].sizeX = BASE_ROTATE_SIZE * inv * 1.5;
+        obj.controls['mtr'].sizeY = BASE_ROTATE_SIZE * inv * 1.5;
+      }
+    }
+  });
+
+  fabricCanvas.requestRenderAll();
 }
 
 
@@ -322,6 +375,14 @@ export default function Canvas({
   // Resize handle dragging state
   const resizingRef = useRef(null); // { corner, startX, startY, startW, startH }
 
+  // ── Pan offset — Canva/Figma-style middle-mouse & zoom-to-cursor panning ──
+  // Stored as a React state (drives the CSS transform) and a ref (always
+  // up-to-date inside wheel/mouse event closures that can't read stale state).
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const panOffsetRef = useRef({ x: 0, y: 0 });
+  // Zoom ref — always current inside non-React closures
+  const zoomRef = useRef(zoom);
+
   // Keep layer callbacks in refs so canvas event handlers always see latest version
   const onLayerAddRef = useRef(onLayerAdd);
   const onLayerSelectRef = useRef(onLayerSelect);
@@ -332,6 +393,9 @@ export default function Canvas({
   useEffect(() => { onLayerSelectRef.current = onLayerSelect; }, [onLayerSelect]);
   useEffect(() => { onLayerNameUpdateRef.current = onLayerNameUpdate; }, [onLayerNameUpdate]);
   useEffect(() => { onLayerRemoveRef.current = onLayerRemove; }, [onLayerRemove]);
+  // Keep zoom/pan refs current so wheel & middle-mouse closures always read latest values
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  useEffect(() => { panOffsetRef.current = panOffset; }, [panOffset]);
 
   // ── Init fabric canvas ────────────────────────────────
   useEffect(() => {
@@ -2537,21 +2601,32 @@ export default function Canvas({
     if (!obj) { setDeletePos(null); return; }
 
     const z = zoom / 100;
+    // The canvas wrapper is transformed as translate(panX, panY) scale(z).
+    // The wrapper is centred in the viewport (flexbox), so a canvas point (px, py)
+    // lands at screen offset from viewport centre:
+    //   screen = (px * z) + panOffset
+    // The delete button position is in pixels from the TOP-LEFT of the viewport,
+    // but the canvas wrapper's 0,0 is at the viewport centre. So:
+    //   button.left = vpW/2 + panOffset.x + px*z
+    //   button.top  = vpH/2 + panOffset.y + py*z
+    // We only store the (px*z + panOffset) part and let the canvas-viewport's
+    // positioning (relative + absolute children) handle the rest via CSS left/top.
+    const px = panOffset.x;
+    const py = panOffset.y;
 
     // Position delete button exactly 20px above the rotation handle
     if (obj.oCoords && obj.oCoords.mtr && obj.oCoords.mt) {
       const mtr = obj.oCoords.mtr;
-      const mt = obj.oCoords.mt;
-      const dx = mtr.x - mt.x;
-      const dy = mtr.y - mt.y;
+      const mt  = obj.oCoords.mt;
+      const dx  = mtr.x - mt.x;
+      const dy  = mtr.y - mt.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist > 0) {
-        // Push 28px further out from the rotation handle
         const push = 28 / dist;
         setDeletePos({
-          x: (mtr.x + dx * push) * z,
-          y: (mtr.y + dy * push) * z,
+          x: (mtr.x + dx * push) * z + px,
+          y: (mtr.y + dy * push) * z + py,
         });
         return;
       }
@@ -2560,10 +2635,10 @@ export default function Canvas({
     // Fallback if no rotation handle exists
     const bound = obj.getBoundingRect();
     setDeletePos({
-      x: (bound.left + bound.width / 2) * z,
-      y: bound.top * z - 40,
+      x: (bound.left + bound.width / 2) * z + px,
+      y: bound.top * z - 40 + py,
     });
-  }, [zoom]);
+  }, [zoom, panOffset]);
 
   // Re-register delete position events whenever zoom changes
   useEffect(() => {
@@ -2591,9 +2666,156 @@ export default function Canvas({
       canvas.off('selection:cleared');
       canvas.off('object:modified', update);
     };
-  }, [zoom, updateDeletePos]);
+  }, [zoom, panOffset, updateDeletePos]);
 
-  // ── Helper: scale all canvas objects proportionally to new canvas dimensions ──
+  // ── Keep selection handles at constant on-screen size regardless of CSS zoom ──
+  // The canvas is scaled via CSS transform:scale(), so Fabric control pixels shrink
+  // proportionally. We invert that by scaling cornerSize / borderScaleFactor / padding
+  // by (1 / zoomFraction). We also listen to selection events so any object selected
+  // AFTER the zoom has already changed gets the right sizing immediately.
+  useEffect(() => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+
+    // Apply immediately for current zoom
+    updateControlsForZoom(canvas, zoom);
+
+    // Also re-apply on every selection change (handles newly selected objects)
+    const onSelect = () => updateControlsForZoom(canvas, zoom);
+    canvas.on('selection:created', onSelect);
+    canvas.on('selection:updated', onSelect);
+
+    return () => {
+      canvas.off('selection:created', onSelect);
+      canvas.off('selection:updated', onSelect);
+    };
+  }, [zoom]);
+
+  // \u2500\u2500 Ctrl + scroll wheel \u2192 zoom to cursor (Canva/Figma style) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Must use a native listener with { passive: false } \u2014 React's synthetic wheel
+  // events are passive by default and cannot call preventDefault().
+  useEffect(() => {
+    const viewport = canvasViewportRef.current;
+    if (!viewport) return;
+
+    const onWheel = (e) => {
+      if (!e.ctrlKey && !e.metaKey) return; // plain scroll \u2014 let it propagate normally
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const ZOOM_SPEED = 0.001;               // sensitivity
+      const MIN_ZOOM = 10;                    // 10%
+      const MAX_ZOOM = 500;                   // 500%
+
+      const oldZoom = zoomRef.current;        // current zoom %
+      const delta = -e.deltaY * ZOOM_SPEED;   // positive = zoom in
+      const rawNew = oldZoom * (1 + delta);
+      const newZoom = Math.round(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, rawNew)));
+
+      if (newZoom === oldZoom) return;
+
+      // Zoom-to-cursor: keep the canvas-space point under the mouse stationary.
+      // 1. Find cursor position relative to the viewport centre (where the
+      //    canvas-wrapper transform-origin sits).
+      const vpRect   = viewport.getBoundingClientRect();
+      const cursorX  = e.clientX - (vpRect.left + vpRect.width  / 2);
+      const cursorY  = e.clientY - (vpRect.top  + vpRect.height / 2);
+
+      // 2. Current pan offset shifts the wrapper from centre, so the canvas-space
+      //    point under the cursor (in un-scaled coords) is:
+      //      point = (cursorX - panX) / (oldZoom/100)
+      // 3. After the zoom change the wrapper translate must satisfy:
+      //      cursorX = point * (newZoom/100) + newPanX
+      //    => newPanX = cursorX - point * (newZoom/100)
+      const oldS = oldZoom / 100;
+      const newS = newZoom / 100;
+      const panX = panOffsetRef.current.x;
+      const panY = panOffsetRef.current.y;
+
+      const pointX = (cursorX - panX) / oldS;
+      const pointY = (cursorY - panY) / oldS;
+
+      const newPanX = cursorX - pointX * newS;
+      const newPanY = cursorY - pointY * newS;
+
+      // Commit both changes together to avoid a flicker frame
+      setPanOffset({ x: newPanX, y: newPanY });
+      setZoom(newZoom);
+
+      // Immediately update the controls so handles don't wait for the next render
+      updateControlsForZoom(fabricRef.current, newZoom);
+    };
+
+    viewport.addEventListener('wheel', onWheel, { passive: false });
+    return () => viewport.removeEventListener('wheel', onWheel);
+  }, []); // no deps \u2014 reads zoom/pan via refs
+
+  // \u2500\u2500 Middle mouse button \u2192 pan (Canva/Figma grab-to-pan) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Attaches to the upper canvas element (which intercepts all pointer events)
+  // and to window for mousemove/mouseup so dragging past canvas edges works.
+  useEffect(() => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    const upper = canvas.upperCanvasEl;
+    if (!upper) return;
+
+    let isPanning = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    const onMouseDown = (e) => {
+      if (e.button !== 1) return;           // only middle button
+      e.preventDefault();                   // stop browser auto-scroll icon
+      isPanning = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      // Disable Fabric selection so objects aren't accidentally picked
+      canvas.selection = false;
+      canvas.discardActiveObject();
+      canvas.requestRenderAll();
+
+      upper.style.cursor = 'grabbing';
+    };
+
+    const onMouseMove = (e) => {
+      if (!isPanning) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      const prev = panOffsetRef.current;
+      const next = { x: prev.x + dx, y: prev.y + dy };
+      panOffsetRef.current = next;     // update ref immediately for smooth dragging
+      setPanOffset(next);
+    };
+
+    const onMouseUp = (e) => {
+      if (!isPanning) return;
+      if (e.button !== 1) return;
+      isPanning = false;
+
+      // Restore Fabric selection and cursor
+      canvas.selection = true;
+      upper.style.cursor = '';
+    };
+
+    // mousedown on canvas upper element; move/up on window so we catch release
+    // even if cursor leaves the canvas area
+    upper.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+
+    return () => {
+      upper.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []); // no deps \u2014 fabricRef.current is stable after init
+
+
   const scaleObjectsToNewSize = useCallback((canvas, oldW, oldH, newW, newH) => {
     if (!canvas || oldW === 0 || oldH === 0) return;
     const ratioX = newW / oldW;
@@ -2870,7 +3092,7 @@ export default function Canvas({
       <div
         ref={canvasWrapperRef}
         className="canvas-wrapper"
-        style={{ transform: `scale(${zoom / 100})` }}
+        style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom / 100})` }}
       >
         <canvas ref={canvasElRef} className="canvas-element" />
 
