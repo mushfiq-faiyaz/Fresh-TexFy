@@ -459,7 +459,7 @@ export default function App() {
               letterSpacing={letterSpacing} setLetterSpacing={setLetterSpacing}
               lineHeight={lineHeight} setLineHeight={setLineHeight}
               opacity={opacity} setOpacity={setOpacity}
-              effect={effect} setEffect={setEffect}
+
               rotation={rotation} setRotation={setRotation}
             />
           </div>

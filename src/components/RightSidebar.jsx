@@ -1,12 +1,6 @@
 import CollapsibleSection from './CollapsibleSection';
 
-const EFFECTS = [
-  { key: 'normal',  label: 'Normal',  icon: '◎' },
-  { key: 'shadow',  label: 'Shadow',  icon: '▣' },
-  { key: 'glow',    label: 'Glow',    icon: '✸' },
-  { key: 'outline', label: 'Outline', icon: '▢' },
-  { key: 'neon',    label: 'Neon',    icon: '⚡' },
-];
+
 
 // Build CSS for a colored slider track (filled up to current value)
 function sliderStyle(value, min, max, gradFrom, gradTo) {
@@ -33,7 +27,6 @@ export default function RightSidebar({
   letterSpacing, setLetterSpacing,
   lineHeight, setLineHeight,
   opacity, setOpacity,
-  effect, setEffect,
   rotation, setRotation,
 }) {
   const inc = () => setFontSize(s => Math.min(s + 1, 200));
@@ -165,21 +158,7 @@ export default function RightSidebar({
         />
       </CollapsibleSection>
 
-      {/* ── TEXT EFFECTS ── */}
-      <CollapsibleSection title="Text Effects">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          {EFFECTS.map(ef => (
-            <button
-              key={ef.key}
-              className={`btn btn-effect ${effect === ef.key ? 'btn-active' : ''}`}
-              onClick={() => setEffect(ef.key)}
-            >
-              <span style={{ fontSize: 13, lineHeight: 1 }}>{ef.icon}</span>
-              {ef.label}
-            </button>
-          ))}
-        </div>
-      </CollapsibleSection>
+
 
       {/* ── ROTATION ── */}
       <CollapsibleSection title="Rotation">
