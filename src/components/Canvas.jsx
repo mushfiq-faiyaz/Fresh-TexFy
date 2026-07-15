@@ -2833,30 +2833,39 @@ export default function Canvas({
     if (!canvas || oldW === 0 || oldH === 0) return;
     const ratioX = newW / oldW;
     const ratioY = newH / oldH;
+
     canvas.getObjects().forEach(obj => {
       // Skip guide lines and blank-layer sentinels
       if (obj.isGuide || obj.isCenterGuide || obj.__isBlankLayer) return;
 
-      // Scale position proportionally
-      obj.set({
-        left: (obj.left ?? 0) * ratioX,
-        top: (obj.top ?? 0) * ratioY,
-      });
-
-      // In Fabric.js the *rendered* size of every object is:
-      //   width * scaleX  and  height * scaleY
-      // width/height are intrinsic (image natural px, text auto-width, etc.)
-      // so we must multiply scaleX/scaleY, NOT width/height.
       if (obj.type === 'i-text' || obj.type === 'text') {
-        // For text: scale fontSize (baked-in size) by avg ratio so glyphs resize
-        // evenly; keep scaleX/scaleY at 1 to avoid stretching letterforms.
-        const avgRatio = (ratioX + ratioY) / 2;
-        obj.set('fontSize', (obj.fontSize ?? 32) * avgRatio);
-      } else {
-        // For images, paths, rects, etc.: multiply the render scale
+        // ── Text: scale position proportionally, scale fontSize by avg ratio ──
         obj.set({
-          scaleX: (obj.scaleX ?? 1) * ratioX,
-          scaleY: (obj.scaleY ?? 1) * ratioY,
+          left: (obj.left ?? 0) * ratioX,
+          top:  (obj.top  ?? 0) * ratioY,
+          fontSize: (obj.fontSize ?? 32) * ((ratioX + ratioY) / 2),
+        });
+
+      } else {
+        // ── Images / paths / rects: re-fit to new canvas like a fresh upload ──
+        // Get the intrinsic pixel size of the object
+        const intrinsicW = obj.width  ?? 1;
+        const intrinsicH = obj.height ?? 1;
+
+        // Fit within 80% of new canvas, preserving aspect ratio (same as addImage)
+        const maxW = newW * 0.8;
+        const maxH = newH * 0.8;
+        const scaleX = maxW / intrinsicW;
+        const scaleY = maxH / intrinsicH;
+        const newScale = Math.min(scaleX, scaleY, 1);
+
+        obj.set({
+          scaleX:  newScale,
+          scaleY:  newScale,
+          left:    newW / 2,
+          top:     newH / 2,
+          originX: 'center',
+          originY: 'center',
         });
       }
 
