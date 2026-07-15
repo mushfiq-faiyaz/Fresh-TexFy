@@ -36,6 +36,9 @@ export default function App() {
   const [effect, setEffect] = useState('normal');
   const [rotation, setRotation] = useState(0);
 
+  // ── Detected image colors (when image selected) ────────────────────────
+  const [imageColors, setImageColors] = useState([]);
+
   // ── Undo/Redo history ─────────────────────────────────
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
@@ -350,7 +353,7 @@ export default function App() {
       <div className="app-body">
 
         {/* ── Left sidebar + toggle ── */}
-        <div style={{ position: 'relative', flexShrink: 0, zIndex: 10 }}>
+        <div style={{ position: 'relative', flexShrink: 0, zIndex: 10, height: '100%' }}>
           <div style={{
             width: leftOpen ? 180 : 0,
             overflow: 'hidden',
@@ -424,10 +427,11 @@ export default function App() {
           onDeleteLayer={handleDeleteLayer}
           onReorderLayers={handleReorderLayers}
           onFlattenLayers={handleFlattenLayers}
+          onImageColorsExtracted={setImageColors}
         />
 
         {/* ── Right sidebar + toggle ── */}
-        <div style={{ position: 'relative', flexShrink: 0, zIndex: 10 }}>
+        <div style={{ position: 'relative', flexShrink: 0, zIndex: 10, height: '100%' }}>
           {/* Right toggle tab */}
           <button
             onClick={() => setRightOpen(v => !v)}
@@ -459,8 +463,8 @@ export default function App() {
               letterSpacing={letterSpacing} setLetterSpacing={setLetterSpacing}
               lineHeight={lineHeight} setLineHeight={setLineHeight}
               opacity={opacity} setOpacity={setOpacity}
-
               rotation={rotation} setRotation={setRotation}
+              imageColors={imageColors}
             />
           </div>
         </div>

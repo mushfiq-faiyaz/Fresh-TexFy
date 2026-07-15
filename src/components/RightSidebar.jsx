@@ -1,6 +1,35 @@
+import { useRef, useState } from 'react';
 import CollapsibleSection from './CollapsibleSection';
 
 
+
+// ── Simple color name helper ─────────────────────────────────────────────────
+const NAMED_PALETTE = [
+  ['White',   [255,255,255]], ['Black',   [0,0,0]],
+  ['Red',     [220,38,38]],   ['Orange',  [234,88,12]],
+  ['Yellow',  [234,179,8]],   ['Green',   [22,163,74]],
+  ['Teal',    [20,184,166]],  ['Cyan',    [6,182,212]],
+  ['Blue',    [37,99,235]],   ['Indigo',  [79,70,229]],
+  ['Violet',  [124,58,237]],  ['Purple',  [168,85,247]],
+  ['Pink',    [236,72,153]],  ['Rose',    [244,63,94]],
+  ['Brown',   [120,53,15]],   ['Gray',    [107,114,128]],
+  ['Silver',  [192,192,192]], ['Lime',    [132,204,22]],
+  ['Amber',   [245,158,11]],  ['Maroon',  [127,29,29]],
+  ['Navy',    [30,58,138]],   ['Olive',   [77,77,0]],
+];
+
+function colorName(hex) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  let bestName = 'Color', bestDist = Infinity;
+  for (const [name, [pr, pg, pb]] of NAMED_PALETTE) {
+    const dist = Math.abs(r - pr) + Math.abs(g - pg) + Math.abs(b - pb);
+    if (dist < bestDist) { bestDist = dist; bestName = name; }
+  }
+  return bestName;
+}
 
 // Build CSS for a colored slider track (filled up to current value)
 function sliderStyle(value, min, max, gradFrom, gradTo) {
@@ -28,6 +57,7 @@ export default function RightSidebar({
   lineHeight, setLineHeight,
   opacity, setOpacity,
   rotation, setRotation,
+  imageColors,
 }) {
   const inc = () => setFontSize(s => Math.min(s + 1, 200));
   const dec = () => setFontSize(s => Math.max(s - 1, 8));
@@ -283,6 +313,191 @@ export default function RightSidebar({
           </div>
         </CollapsibleSection>
       )}
+
+      {/* ── COLORS DETECTED ── */}
+      {imageColors && imageColors.length > 0 && (
+        <ColorsDetectedSection imageColors={imageColors} fabricRef={fabricRef} />
+      )}
     </aside>
+  );
+}
+
+// ── Colors Detected section — self-contained with show-more state ──────────
+const TOP_N = 5; // colors shown by default
+
+function ColorsDetectedSection({ imageColors, fabricRef }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const primary   = imageColors.slice(0, TOP_N);
+  const secondary = imageColors.slice(TOP_N);
+  const hasMore   = secondary.length > 0;
+
+  return (
+    <CollapsibleSection title="Colors Detected">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+
+        {/* Primary colors — always visible */}
+        {primary.map((item, idx) => (
+          <DetectedColorRow
+            key={`${item.hex}-${idx}`}
+            item={item}
+            fabricRef={fabricRef}
+          />
+        ))}
+
+        {/* Secondary colors — hidden by default */}
+        {hasMore && (
+          <>
+            {/* Animated reveal container */}
+            <div
+              style={{
+                overflow: 'hidden',
+                maxHeight: expanded ? `${secondary.length * 38}px` : '0px',
+                transition: 'max-height 0.28s cubic-bezier(0.4,0,0.2,1)',
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7, paddingTop: 0 }}>
+                {secondary.map((item, idx) => (
+                  <DetectedColorRow
+                    key={`${item.hex}-${TOP_N + idx}`}
+                    item={item}
+                    fabricRef={fabricRef}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Toggle button */}
+            <button
+              onClick={() => setExpanded(v => !v)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '3px 0',
+                color: 'rgba(255,255,255,0.38)',
+                fontSize: 10,
+                fontWeight: 500,
+                letterSpacing: '0.04em',
+                transition: 'color 0.15s',
+                textAlign: 'left',
+                width: '100%',
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.65)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.38)'}
+            >
+              {/* Chevron icon */}
+              <svg
+                width="10" height="10"
+                viewBox="0 0 10 10"
+                fill="none"
+                style={{
+                  flexShrink: 0,
+                  transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.22s cubic-bezier(0.4,0,0.2,1)',
+                }}
+              >
+                <path d="M3 2L7 5L3 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {expanded ? 'Show fewer' : `${secondary.length} more color${secondary.length > 1 ? 's' : ''}`}
+            </button>
+          </>
+        )}
+
+        {/* Footer hint */}
+        <div style={{
+          fontSize: 9,
+          color: 'rgba(255,255,255,0.22)',
+          letterSpacing: '0.04em',
+          paddingTop: 1,
+        }}>
+          Click a color to recolor it in the image
+        </div>
+      </div>
+    </CollapsibleSection>
+  );
+}
+
+// ── Detected Color Row — one per palette entry ─────────────────────────────
+// Renders a round circle + label + coverage bar + hex — matches LeftSidebar color-row.
+// Clicking opens the native color picker; on change, replaces that color in
+// the currently selected image on the canvas.
+function DetectedColorRow({ item, fabricRef }) {
+  const { hex, coverage } = item;
+  const inputRef = useRef(null);
+
+  const handleClick = () => {
+    inputRef.current?.click();
+  };
+
+  const handleChange = (e) => {
+    const newHex = e.target.value;
+    if (!newHex || !fabricRef?.current) return;
+    const canvas = fabricRef.current;
+    const img = canvas.getActiveObject?.();
+    if (!img) return;
+    const isImage = img._element || img.type === 'image' || img.type === 'FabricImage';
+    if (!isImage) return;
+    canvas._replaceImageColor?.(img, hex, newHex, 40);
+  };
+
+  return (
+    <div
+      className="color-row"
+      style={{ cursor: 'pointer', alignItems: 'center' }}
+      onClick={handleClick}
+      title={`Click to change this color everywhere in the image`}
+    >
+      {/* Round circle swatch — hidden native color input styled via CSS */}
+      <input
+        ref={inputRef}
+        type="color"
+        value={hex}
+        onChange={handleChange}
+        title={`Change ${colorName(hex)} (${hex.toUpperCase()})`}
+        style={{ pointerEvents: 'none', flexShrink: 0 }}
+      />
+
+      {/* Label + coverage bar */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', fontWeight: 500 }}>
+            {colorName(hex)}
+          </span>
+          <span style={{
+            fontSize: 9,
+            color: 'rgba(255,255,255,0.32)',
+            fontFamily: 'monospace',
+            letterSpacing: '0.04em',
+            flexShrink: 0,
+            marginLeft: 6,
+          }}>
+            {hex.toUpperCase()}
+          </span>
+        </div>
+        {/* Coverage bar */}
+        {coverage > 0 && (
+          <div style={{
+            marginTop: 3,
+            height: 2,
+            borderRadius: 999,
+            background: 'rgba(255,255,255,0.08)',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              height: '100%',
+              width: `${Math.min(100, coverage)}%`,
+              borderRadius: 999,
+              background: hex,
+              opacity: 0.75,
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

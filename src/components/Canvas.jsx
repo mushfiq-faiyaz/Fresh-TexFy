@@ -329,6 +329,8 @@ export default function Canvas({
   onFlattenLayers,
   // Canvas resize ref — Toolbar stores resizeCanvas(w,h) function here
   canvasResizeRef,
+  // Colors Detected callback
+  onImageColorsExtracted,
 }) {
   const canvasElRef = useRef(null);
   const canvasWrapperRef = useRef(null);
@@ -481,6 +483,7 @@ export default function Canvas({
     canvas.on('selection:cleared', () => {
       setSelectedObj(null);
       onLayerSelectRef.current(null);
+      onImageColorsExtractedRef.current?.([]);
     });
     canvas.on('object:modified', saveHistory);
     canvas.on('object:added', (e) => {
@@ -1051,6 +1054,14 @@ export default function Canvas({
         if (setLineHeight) setLineHeight(Math.round((obj.lineHeight || 1.2) * 10) / 10);
         if (setOpacity) setOpacity(Math.round((obj.opacity ?? 1) * 100));
         if (setRotation) setRotation(Math.round(obj.angle || 0));
+        // Clear image colors for text objects
+        onImageColorsExtractedRef.current?.([]);
+      } else if (obj._element || obj.type === 'image' || obj.type === 'FabricImage') {
+        // Extract dominant colors from selected image
+        const colors = extractImageColorsRef.current(obj);
+        onImageColorsExtractedRef.current?.(colors);
+      } else {
+        onImageColorsExtractedRef.current?.([]);
       }
     }
   }
@@ -1305,12 +1316,165 @@ export default function Canvas({
         canvas.requestRenderAll();
         setSelectedObj(fabricImg);
 
+        // Extract and broadcast dominant colors
+        const colors = extractImageColorsRef.current(fabricImg);
+        onImageColorsExtractedRef.current?.(colors);
+
         showToast('💡 Best results with flat/solid color logos');
       };
       imgElement.src = ev.target.result;
     };
     reader.readAsDataURL(file);
   }, [showToast]);
+
+  // ── Extract dominant colors from a fabric image ───────────────────────────
+  // Returns up to `maxColors` items: { hex, coverage } sorted largest-first.
+  // coverage is a 0-100 percentage of the image's visible (non-transparent) pixels.
+  const extractImageColors = useCallback((fabricImg, maxColors = 12) => {
+    if (!fabricImg) return [];
+    const el = fabricImg._element || fabricImg.getElement?.();
+    if (!el) return [];
+    try {
+      const srcW = el.naturalWidth || el.width;
+      const srcH = el.naturalHeight || el.height;
+      if (!srcW || !srcH) return [];
+
+      // Sample at reduced resolution for speed
+      const sampleW = Math.min(srcW, 150);
+      const sampleH = Math.min(srcH, 150);
+
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = sampleW;
+      tmpCanvas.height = sampleH;
+      const ctx = tmpCanvas.getContext('2d');
+      ctx.drawImage(el, 0, 0, sampleW, sampleH);
+      const { data } = ctx.getImageData(0, 0, sampleW, sampleH);
+
+      // Quantize to 32-step buckets to group similar shades
+      const STEP = 32;
+      const buckets = {};
+      let totalVisible = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3];
+        if (a < 30) continue; // skip transparent pixels
+        totalVisible++;
+        const r = Math.round(data[i]     / STEP) * STEP;
+        const g = Math.round(data[i + 1] / STEP) * STEP;
+        const b = Math.round(data[i + 2] / STEP) * STEP;
+        const key = `${r},${g},${b}`;
+        buckets[key] = (buckets[key] || 0) + 1;
+      }
+
+      if (totalVisible === 0) return [];
+
+      // Sort by frequency (= area coverage) — largest first
+      const sorted = Object.entries(buckets)
+        .sort((a, b) => b[1] - a[1]);
+
+      // Filter out nearly-identical colors (within 48 on each channel)
+      const picked = [];
+      for (const [key, count] of sorted) {
+        if (picked.length >= maxColors) break;
+        const [r, g, b] = key.split(',').map(Number);
+        const tooClose = picked.some(({ _rgb: [pr, pg, pb] }) =>
+          Math.abs(r - pr) < 48 && Math.abs(g - pg) < 48 && Math.abs(b - pb) < 48
+        );
+        if (!tooClose) {
+          const toHex = v => Math.min(255, v).toString(16).padStart(2, '0');
+          picked.push({
+            hex: `#${toHex(r)}${toHex(g)}${toHex(b)}`,
+            coverage: Math.round((count / totalVisible) * 100),
+            _rgb: [r, g, b], // internal, stripped below
+          });
+        }
+      }
+
+      // Strip internal _rgb before returning
+      return picked.map(({ hex, coverage }) => ({ hex, coverage }));
+    } catch (e) {
+      console.warn('[TexFy] Color extraction failed:', e);
+      return [];
+    }
+  }, []);
+
+  // Keep a ref so the selection handler (inside the init effect closure) can call it
+  const extractImageColorsRef = useRef(extractImageColors);
+  useEffect(() => { extractImageColorsRef.current = extractImageColors; }, [extractImageColors]);
+  const onImageColorsExtractedRef = useRef(onImageColorsExtracted);
+  useEffect(() => { onImageColorsExtractedRef.current = onImageColorsExtracted; }, [onImageColorsExtracted]);
+
+  // ── Replace a specific color in a fabric image ────────────────────────────
+  // targetHex: the color to replace (from extracted palette)
+  // newHex: the replacement color
+  // tolerance: how close a pixel must be to match (0–255, default 40)
+  const replaceImageColor = useCallback((fabricImg, targetHex, newHex, tolerance = 40) => {
+    if (!fabricImg) return;
+    const el = fabricImg._element || fabricImg.getElement?.();
+    if (!el) return;
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+
+    try {
+      const srcW = el.naturalWidth || el.width;
+      const srcH = el.naturalHeight || el.height;
+      if (!srcW || !srcH) return;
+
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = srcW;
+      tmpCanvas.height = srcH;
+      const ctx = tmpCanvas.getContext('2d');
+      ctx.drawImage(el, 0, 0, srcW, srcH);
+      const imageData = ctx.getImageData(0, 0, srcW, srcH);
+      const data = imageData.data;
+
+      // Parse target and new colors
+      const parseHex = (hex) => {
+        const h = hex.replace('#', '');
+        return [
+          parseInt(h.substring(0, 2), 16),
+          parseInt(h.substring(2, 4), 16),
+          parseInt(h.substring(4, 6), 16),
+        ];
+      };
+      const [tr, tg, tb] = parseHex(targetHex);
+      const [nr, ng, nb] = parseHex(newHex);
+
+      for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3];
+        if (a < 10) continue; // skip fully transparent pixels
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        const dist = Math.sqrt(
+          (r - tr) ** 2 + (g - tg) ** 2 + (b - tb) ** 2
+        );
+        if (dist <= tolerance) {
+          // Smooth blend at edges: pixels near the tolerance boundary get a
+          // partial blend (anti-aliasing) to avoid jagged outlines
+          const blend = dist <= tolerance * 0.7 ? 1 : 1 - (dist - tolerance * 0.7) / (tolerance * 0.3);
+          data[i]     = Math.round(r + (nr - r) * blend);
+          data[i + 1] = Math.round(g + (ng - g) * blend);
+          data[i + 2] = Math.round(b + (nb - b) * blend);
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      const dataURL = tmpCanvas.toDataURL('image/png');
+
+      const newImgEl = new Image();
+      newImgEl.onload = () => {
+        fabricImg.setElement(newImgEl);
+        fabricImg.dirty = true;
+        canvas.requestRenderAll();
+        saveHistory();
+
+        // Re-extract colors from the updated image and notify
+        const newColors = extractImageColorsRef.current(fabricImg);
+        onImageColorsExtractedRef.current?.(newColors);
+      };
+      newImgEl.src = dataURL;
+    } catch (e) {
+      console.warn('[TexFy] Color replace failed:', e);
+    }
+  }, [saveHistory]);
 
   // ── Layer Separator ────────────────────────────────────────────────────────
   const separateLayers = useCallback(async () => {
@@ -2159,7 +2323,7 @@ export default function Canvas({
     }
   }, [showToast]);
 
-  // ── Expose addText, addImage, separators & addBlankLayer via fabricRef ───
+  // ── Expose addText, addImage, separators, addBlankLayer, replaceImageColor via fabricRef ───
   useEffect(() => {
     if (fabricRef.current) {
       fabricRef.current._addText = addText;
@@ -2169,8 +2333,10 @@ export default function Canvas({
       fabricRef.current._separateColorWise = separateColorWise;
       fabricRef.current._separateAreaWise = separateAreaWise;
       fabricRef.current._separateBothWise = separateBothWise;
+      fabricRef.current._extractImageColors = extractImageColors;
+      fabricRef.current._replaceImageColor = replaceImageColor;
     }
-  }, [addText, addImage, addBlankLayer, separateLayers, separateColorWise, separateAreaWise, separateBothWise]);
+  }, [addText, addImage, addBlankLayer, separateLayers, separateColorWise, separateAreaWise, separateBothWise, extractImageColors, replaceImageColor]);
 
   // ── Context menu: close helper ────────────────────────
   const closeCtxMenu = useCallback(() => {

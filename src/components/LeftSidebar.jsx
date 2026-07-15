@@ -172,6 +172,7 @@ export default function LeftSidebar({
       className="glass"
       style={{
         width: 180,
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         overflowY: 'auto',
