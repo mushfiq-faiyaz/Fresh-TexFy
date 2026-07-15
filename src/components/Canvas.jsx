@@ -451,6 +451,13 @@ export default function Canvas({
         if (obj.hiddenTextarea) {
           obj.hiddenTextarea.style.transform = `rotate(${obj.angle}deg)`;
           obj.hiddenTextarea.style.transformOrigin = 'center center';
+          // Prevent the browser from scrolling to the hidden textarea when it gets focus.
+          // Fabric positions it based on canvas coordinates, which can be off-screen and
+          // causes the entire page layout to shift. Fixing it to a safe off-screen position
+          // stops the scroll without breaking keyboard input.
+          obj.hiddenTextarea.style.position = 'fixed';
+          obj.hiddenTextarea.style.top = '0';
+          obj.hiddenTextarea.style.left = '-9999px';
         }
 
         if (upper) upper.style.cursor = rotatedCursor;
@@ -1210,6 +1217,12 @@ export default function Canvas({
     setTimeout(() => {
       text.enterEditing();
       text.selectAll();
+      // Fix hidden textarea position immediately to prevent browser scroll-into-view
+      if (text.hiddenTextarea) {
+        text.hiddenTextarea.style.position = 'fixed';
+        text.hiddenTextarea.style.top = '0';
+        text.hiddenTextarea.style.left = '-9999px';
+      }
       canvas.requestRenderAll();
     }, 50);
   }, []);
